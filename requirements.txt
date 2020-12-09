@@ -1,0 +1,14 @@
+click
+Flask
+Flask-HTTPAuth
+Flask-Script
+Flask-SQLAlchemy
+itsdangerous
+Jinja2
+MarkupSafe
+psycopg2
+PyJWT
+SQLAlchemy
+Werkzeug
+pylint-flask
+pylint-flask-sqlalchemy
