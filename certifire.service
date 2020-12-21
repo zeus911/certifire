@@ -3,7 +3,7 @@ Description=Certifire Automatic Certificate Management Environment (ACME) Interm
 After=network.target
 
 [Service]
-User=ubuntu
+User=certifire
 WorkingDirectory=/home/certifire/certifire
 ExecStart=/home/certifire/certifire/bin/certifire-manager runserver
 Restart=always
