@@ -3,7 +3,8 @@ import time
 
 import jwt
 from flask import abort, g, jsonify, request, url_for
-from sqlalchemy import Column, Integer, String
+from sqlalchemy import Column, Integer, String, Boolean
+from sqlalchemy.orm import relationship
 from werkzeug.security import check_password_hash, generate_password_hash
 
 from certifire import app, auth, db
@@ -14,6 +15,16 @@ class User(db.Model):
     id = Column(Integer, primary_key=True)
     username = Column(String(32), index=True)
     password_hash = Column(String(128))
+    is_admin = Column(Boolean())
+
+    user_acme_account = relationship("Account", foreign_keys="Account.user_id")
+    order_account = relationship("Order", foreign_keys="Order.user_id")
+    certificate_account = relationship("Certificate", foreign_keys="Certificate.user_id")
+
+    def __init__(self, username, password, is_admin=False):
+        self.username = username
+        self.hash_password(password)
+        self.is_admin = is_admin
 
     def hash_password(self, password):
         self.password_hash = generate_password_hash(password)
@@ -50,16 +61,22 @@ def verify_password(username_or_token, password):
 
 
 @app.route('/api/users', methods=['POST'])
+@auth.login_required
 def new_user():
-    post_data = request.get_json(force=True)
+    if not g.user.is_admin:
+        abort(400)
+    post_data = request.form
     username = post_data.get('username')
     password = post_data.get('password')
     if username is None or password is None:
-        abort(400)    # missing arguments
+        post_data = request.get_json(force=True)
+        username = post_data.get('username')
+        password = post_data.get('password')
+        if username is None or password is None:
+            abort(400)    # missing arguments
     if User.query.filter_by(username=username).first() is not None:
-        abort(400)    # existing user
-    user = User(username=username)
-    user.hash_password(password)
+        return (jsonify({'status': 'Username {} already exists'.format(username)}), 400)    # existing user
+    user = User(username,password)
     db.session.add(user)
     db.session.commit()
     return (jsonify({'username': user.username}), 201,
@@ -78,7 +95,8 @@ def get_user(id):
 @auth.login_required
 def get_auth_token():
     token = g.user.generate_auth_token(600)
-    return jsonify({'token': token.decode('ascii'), 'duration': 600})
+    return (jsonify({'token': token.decode('ascii'), 'duration': 600}), 200,
+            {'token': token})
 
 
 @app.route('/api/resource')

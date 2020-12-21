@@ -4,6 +4,7 @@ import os
 from certifire import app, db, users, certificates
 from certifire.plugins.acme import models
 from certifire.plugins.acme.register import register
+from certifire.plugins.acme import views
 
 manager = Manager(app)
 
@@ -16,10 +17,13 @@ def create_db():
 def init():
     """Creates the db tables and admin user"""
     db.create_all()
-    pwd = input("Enter password for admin user: ")
-    user = users.User('admin',pwd,True)
-    db.session.add(user)
-    db.session.commit()
+    if users.User.query.filter_by(username='admin').first() is not None:
+        print("Admin user already exists")
+    else:
+        pwd = input("Enter password for admin user: ")
+        user = users.User('admin',pwd,True)
+        db.session.add(user)
+        db.session.commit()
 
 
 @manager.command

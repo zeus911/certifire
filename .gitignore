@@ -8,6 +8,7 @@ __pycache__
 *.pyc
 *.sqlite
 *.coverage
+*.egg-info/
 .DS_Store
 env.sh
 migrations
@@ -15,5 +16,10 @@ migrations
 bin/
 lib/
 lib64/
+dist/
 pyvenv.cfg
 .vscode/
+*.crt
+*.pem
+*.json
+orders/
