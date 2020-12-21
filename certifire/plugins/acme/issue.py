@@ -33,7 +33,7 @@ def issue(account, order, key_size, key_file=None,
     print("Certifire {}. Issue certificate.\n\n".format(
         get_version()))
 
-    if order.status == 'Issued':
+    if order.status == 'Issued' or order.status == 'Revoked':
         return False, order.resolved_cert_id
 
     paths = config.paths
