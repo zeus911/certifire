@@ -14,7 +14,7 @@ Create and switch to new user
 Install dependencies
 
     $ sudo apt update && sudo apt upgrade
-    $ sudo apt install python3-dev python3-pip python3-virtualenv libpq-dev build-essential libssl-dev libffi-dev nginx git postgresql certbot python3-certbot-nginx
+    $ sudo apt install python3-dev python3-pip python3-virtualenv libpq-dev build-essential libssl-dev libffi-dev nginx git postgresql awscli certbot python3-certbot-nginx
     $ sudo systemctl enable --now postgresql.service
 
 Setup Postgresql
@@ -75,6 +75,11 @@ Then restart nginx
 (optional) Run certbot for https - Instructions for ubuntu 20.04 server given
 
     $ sudo certbot --nginx
+
+Configure aws credentials for route53 dns:
+
+    $ aws configure
+    
 Running
 -------
 
@@ -87,6 +92,12 @@ To run the server use the following command:
      * Restarting with reloader
 
 Now the server is ready to accept requests at https://api.certifire.xyz (or whatever you have configured)
+
+To run certifire as a service:
+
+    $ sudo cp certifire.service /etc/systemd/system/
+    $ sudo systemctl daemon-reload
+    $ sudo systemctl enable --now certifire
 
 API Documentation
 -----------------
