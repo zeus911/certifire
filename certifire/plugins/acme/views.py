@@ -183,6 +183,6 @@ def revoke_cert(id):
     ret, status = revoke_certificate(order.account_id, certificate.id)
 
     if ret:
-        return (jsonify({'status': status}), 201)
+        return (jsonify({'status': status}), 200)
     else:
         return (jsonify({'status': status}), 201)
