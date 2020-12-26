@@ -1,27 +1,25 @@
 import base64
+import datetime
 import json
 import logging
-
-from cryptography import x509
-from cryptography.x509 import NameOID
-from cryptography.hazmat.backends import default_backend
-from cryptography.hazmat.primitives.asymmetric import padding
-from cryptography.hazmat.primitives.asymmetric.rsa import (
-    generate_private_key,
-    RSAPrivateKey,
-)
-from cryptography.hazmat.primitives.asymmetric.ec import (
-    EllipticCurvePrivateKey,
-)
-from cryptography.hazmat.primitives.serialization import (
-    load_pem_private_key,
-    Encoding,
-    PrivateFormat,
-    NoEncryption,
-)
-from cryptography.hazmat.primitives import hashes
-
 import re
+
+import josepy as jose
+import OpenSSL
+from certifire import config
+from cryptography import x509
+from cryptography.hazmat.backends import default_backend
+from cryptography.hazmat.primitives import hashes, serialization
+from cryptography.hazmat.primitives.asymmetric import padding
+from cryptography.hazmat.primitives.asymmetric.ec import \
+    EllipticCurvePrivateKey
+from cryptography.hazmat.primitives.asymmetric.rsa import (
+    RSAPrivateKey, generate_private_key)
+from cryptography.hazmat.primitives.serialization import (Encoding,
+                                                          NoEncryption,
+                                                          PrivateFormat,
+                                                          load_pem_private_key)
+from cryptography.x509 import NameOID
 
 logger = logging.getLogger(__name__)
 
@@ -33,11 +31,45 @@ def jose_b64(data):
     return base64.urlsafe_b64encode(data).decode('ascii').replace('=', '')
 
 
-def generate_rsa_key(size=2048):
+def generate_rsa_key(size=4096):
     """
     Generates a new RSA private key.
     """
     return generate_private_key(65537, size, default_backend())
+
+
+def export_private_key(key):
+    """
+    Exports a private key in OpenSSL PEM format.
+    """
+    return key.private_bytes(Encoding.PEM, PrivateFormat.TraditionalOpenSSL, NoEncryption())
+
+
+def load_private_key(data):
+    """
+    Loads a PEM-encoded private key.
+    """
+    key = load_pem_private_key(data, password=None, backend=default_backend())
+    if not isinstance(key, (RSAPrivateKey, EllipticCurvePrivateKey)):
+        raise ValueError("Key is not a private RSA or EC key.")
+    elif isinstance(key, RSAPrivateKey) and key.key_size < 2048:
+        raise ValueError("The key must be 2048 bits or longer.")
+
+    return key
+
+
+def export_csr_for_acme(csr):
+    """
+    Exports a X.509 CSR for the ACME protocol (JOSE Base64 DER).
+    """
+    return export_certificate_for_acme(csr)
+
+
+def load_csr(data):
+    """
+    Loads a PEM X.509 CSR.
+    """
+    return x509.load_pem_x509_csr(data, default_backend())
 
 
 def generate_header(account_key):
@@ -47,7 +79,7 @@ def generate_header(account_key):
     numbers = account_key.public_key().public_numbers()
     e = numbers.e.to_bytes((numbers.e.bit_length() // 8 + 1), byteorder='big')
     n = numbers.n.to_bytes((numbers.n.bit_length() // 8 + 1), byteorder='big')
-    if n[0] == 0: # for strict JWK
+    if n[0] == 0:  # for strict JWK
         n = n[1:]
     return {
         'alg': 'RS256',
@@ -72,96 +104,106 @@ def generate_jwk_thumbprint(account_key):
     return jose_b64(sha256.finalize())
 
 
-def sign_request(key, header, protected_header, payload):
+def create_csr(csr_config, private_key=None):
     """
-    Creates a JSON Web Signature for the request header and payload using the
-    specified account key.
-    """
-    protected = jose_b64(json.dumps(protected_header).encode('utf8'))
-    payload = jose_b64(json.dumps(payload).encode('utf8'))
-    data = "{protected}.{payload}".format(protected=protected, payload=payload)
-    signed_data = key.sign(data.encode("ascii"), padding.PKCS1v15(),
-                           hashes.SHA256())
-    return json.dumps({
-        'header': header,
-        'protected': protected,
-        'payload': payload,
-        'signature': jose_b64(signed_data),
-    })
+    Given a list of domains create the appropriate csr
+    for those domains
 
-
-def sign_request_v2(key, protected_header, payload):
+    :param csr_config:
     """
-    Creates a JSON Web Signature for the request header and payload using the
-    specified account key.
-    """
-    protected = jose_b64(json.dumps(protected_header).encode('utf8'))
-    # Forced payload none for Post-as-Get
-    if payload is not None and payload != "":
-        payload = jose_b64(json.dumps(payload).encode('utf8'))
-    elif payload is None:
-        payload = ""
-    data = "{protected}.{payload}".format(protected=protected, payload=payload)
-    signed_data = key.sign(data.encode("ascii"), padding.PKCS1v15(),
-                           hashes.SHA256())
-    return json.dumps({
-        'protected': protected,
-        'payload': payload,
-        'signature': jose_b64(signed_data),
-    })
+    if not private_key:
+        private_key = generate_rsa_key(4096)
 
+    builder = x509.CertificateSigningRequestBuilder()
+    name_list = [x509.NameAttribute(
+        x509.OID_COMMON_NAME, csr_config["domains"][0])]
 
-def load_private_key(data):
-    """
-    Loads a PEM-encoded private key.
-    """
-    key = load_pem_private_key(data, password=None, backend=default_backend())
-    if not isinstance(key, (RSAPrivateKey, EllipticCurvePrivateKey)):
-        raise ValueError("Key is not a private RSA or EC key.")
-    elif isinstance(key, RSAPrivateKey) and key.key_size < 2048:
-        raise ValueError("The key must be 2048 bits or longer.")
+    name_list.append(
+        x509.NameAttribute(x509.OID_EMAIL_ADDRESS, csr_config["owner"])
+    )
+    if "organization" in csr_config and csr_config["organization"].strip():
+        name_list.append(
+            x509.NameAttribute(x509.OID_ORGANIZATION_NAME,
+                               csr_config["organization"])
+        )
+    if (
+        "organizational_unit" in csr_config
+        and csr_config["organizational_unit"].strip()
+    ):
+        name_list.append(
+            x509.NameAttribute(
+                x509.OID_ORGANIZATIONAL_UNIT_NAME, csr_config["organizational_unit"]
+            )
+        )
+    if "country" in csr_config and csr_config["country"].strip():
+        name_list.append(
+            x509.NameAttribute(x509.OID_COUNTRY_NAME, csr_config["country"])
+        )
+    if "state" in csr_config and csr_config["state"].strip():
+        name_list.append(
+            x509.NameAttribute(
+                x509.OID_STATE_OR_PROVINCE_NAME, csr_config["state"])
+        )
+    if "location" in csr_config and csr_config["location"].strip():
+        name_list.append(
+            x509.NameAttribute(x509.OID_LOCALITY_NAME, csr_config["location"])
+        )
 
-    return key
+    if "domains" in csr_config:
+        san = x509.SubjectAlternativeName(
+            [x509.DNSName(domain) for domain in csr_config["domains"]])
+        builder.add_extension(san, critical=True)
 
+    builder = builder.subject_name(
+        x509.Name(name_list)).add_extension(san, critical=False)
 
-def export_private_key(key):
-    """
-    Exports a private key in OpenSSL PEM format.
-    """
-    return key.private_bytes(Encoding.PEM, PrivateFormat.TraditionalOpenSSL, NoEncryption())
-
-
-def create_csr(key, domains, must_staple=False):
-    """
-    Creates a CSR in DER format for the specified key and domain names.
-    """
-    assert domains
-    name = x509.Name([
-        x509.NameAttribute(NameOID.COMMON_NAME, domains[0]),
-    ])
-    san = x509.SubjectAlternativeName(
-        [x509.DNSName(domain) for domain in domains])
-    csr = (x509.CertificateSigningRequestBuilder()
-           .subject_name(name).add_extension(san, critical=False))
-    if must_staple:
+    if csr_config.get("must_staple", False):
         ocsp_must_staple = x509.TLSFeature(
             features=[x509.TLSFeatureType.status_request])
-        csr = csr.add_extension(ocsp_must_staple, critical=False)
-    return csr.sign(key, hashes.SHA256(), default_backend())
+        builder.add_extension(ocsp_must_staple, critical=False)
 
+    extensions = csr_config.get("extensions", {})
+    critical_extensions = ["basic_constraints", "sub_alt_names", "key_usage"]
+    noncritical_extensions = ["extended_key_usage"]
+    for k, v in extensions.items():
+        if v:
+            if k in critical_extensions:
+                logger.debug(
+                    "Adding Critical Extension: {0} {1}".format(k, v)
+                )
+                if k == "sub_alt_names":
+                    if v["names"]:
+                        builder = builder.add_extension(
+                            v["names"], critical=True)
+                else:
+                    builder = builder.add_extension(v, critical=True)
 
-def export_csr_for_acme(csr):
-    """
-    Exports a X.509 CSR for the ACME protocol (JOSE Base64 DER).
-    """
-    return export_certificate_for_acme(csr)
+            if k in noncritical_extensions:
+                logger.debug("Adding Extension: {0} {1}".format(k, v))
+                builder = builder.add_extension(v, critical=False)
 
+    ski = extensions.get("subject_key_identifier", {})
+    if ski.get("include_ski", False):
+        builder = builder.add_extension(
+            x509.SubjectKeyIdentifier.from_public_key(
+                private_key.public_key()),
+            critical=False,
+        )
 
-def load_csr(data):
-    """
-    Loads a PEM X.509 CSR.
-    """
-    return x509.load_pem_x509_csr(data, default_backend())
+    request = builder.sign(private_key, hashes.SHA256(), default_backend())
+
+    # serialize our private key and CSR
+    private_key = private_key.private_bytes(
+        encoding=serialization.Encoding.PEM,
+        # would like to use PKCS8 but AWS ELBs don't like it
+        format=serialization.PrivateFormat.TraditionalOpenSSL,
+        encryption_algorithm=serialization.NoEncryption(),
+    ).decode("utf-8")
+
+    csr = request.public_bytes(
+        encoding=serialization.Encoding.PEM).decode("utf-8")
+
+    return csr, private_key
 
 
 def load_der_certificate(data):
@@ -214,3 +256,28 @@ def strip_certificates(data):
     for cert in p.findall(data.decode()):
         stripped_data.append(cert.encode())
     return stripped_data
+
+
+def extract_cert_and_chain(fullchain_pem):
+    pem_certificate = OpenSSL.crypto.dump_certificate(
+        OpenSSL.crypto.FILETYPE_PEM,
+        OpenSSL.crypto.load_certificate(
+            OpenSSL.crypto.FILETYPE_PEM, fullchain_pem
+        ),
+    ).decode()
+
+    if config.IDENTRUST_CROSS_SIGNED_LE_ICA \
+            and datetime.datetime.now() < datetime.datetime.strptime(
+            config.IDENTRUST_CROSS_SIGNED_LE_ICA_EXPIRATION_DATE, '%d/%m/%y'):
+        pem_certificate_chain = config.IDENTRUST_CROSS_SIGNED_LE_ICA
+    else:
+        pem_certificate_chain = fullchain_pem[len(pem_certificate):].lstrip()
+
+    return pem_certificate, pem_certificate_chain
+
+def load_cert_for_revoke(key_pem, is_x509_cert=True):
+    if is_x509_cert:
+      pubkey = OpenSSL.crypto.load_certificate(OpenSSL.crypto.FILETYPE_PEM, key_pem)
+    else:
+      pubkey = OpenSSL.crypto.load_privatekey(OpenSSL.crypto.FILETYPE_PEM, key_pem)
+    return jose.ComparableX509(pubkey)

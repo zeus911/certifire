@@ -1,9 +1,11 @@
 import collections
+import time
 
 import boto3  # type: ignore
 from botocore.client import Config  # type: ignore
 
-from . import common
+from certifire.plugins.dns_providers import common
+from certifire.errors import PluginError
 
 
 # most code of this class is copy from certbot's route53 dns plugin.
@@ -40,10 +42,12 @@ class Route53Dns(common.BaseDns):
         super().__init__(**kwargs)
 
     def create_dns_record(self, domain_name, domain_dns_value):
+        print("Creating DNS TXT record: {} for domain: {}".format(domain_dns_value, domain_name))
         challenge_domain = "_acme-challenge" + "." + domain_name + "."
         return self._change_txt_record("UPSERT", challenge_domain, domain_dns_value)
 
     def delete_dns_record(self, domain_name, domain_dns_value):
+        print("Deleting DNS TXT record: {} for domain: {}".format(domain_dns_value, domain_name))
         challenge_domain = "_acme-challenge" + "." + domain_name + "."
         return self._change_txt_record("DELETE", challenge_domain, domain_dns_value)
 
@@ -109,3 +113,16 @@ class Route53Dns(common.BaseDns):
             },
         )
         return response["ChangeInfo"]["Id"]
+    
+    def wait_for_change(self, change_id):
+        """Wait for a change to be propagated to all Route53 DNS servers.
+           https://docs.aws.amazon.com/Route53/latest/APIReference/API_GetChange.html
+        """
+        for unused_n in range(0, 120):
+            response = self.r53.get_change(Id=change_id)
+            if response["ChangeInfo"]["Status"] == "INSYNC":
+                return
+            time.sleep(5)
+        raise PluginError(
+            "Timed out waiting for Route53 change. Current status: %s" %
+            response["ChangeInfo"]["Status"])

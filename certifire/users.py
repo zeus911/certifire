@@ -3,7 +3,7 @@ import time
 
 import jwt
 from flask import abort, g, jsonify, request, url_for
-from sqlalchemy import Column, Integer, String, Boolean
+from sqlalchemy import Boolean, Column, Integer, String
 from sqlalchemy.orm import relationship
 from werkzeug.security import check_password_hash, generate_password_hash
 
@@ -95,7 +95,7 @@ def get_user(id):
 @auth.login_required
 def get_auth_token():
     token = g.user.generate_auth_token(600)
-    return (jsonify({'token': token.decode('ascii'), 'duration': 600}), 200,
+    return (jsonify({'token': token, 'duration': 600}), 200,
             {'token': token})
 
 

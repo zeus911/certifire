@@ -1,23 +1,20 @@
-from certifire import get_version
-from certifire.plugins.acme.authorize import authorize
-from certifire.plugins.acme.issue import issue
-from certifire.plugins.acme.info import info
-from certifire.plugins.acme.models import Account, Order, Certificate
-from certifire.plugins.acme.register import register
-from certifire.plugins.acme.revoke import revoke
-from certifire.errors import CertifireError
-
 import argparse
-from cartola import sysexits
 import logging
-import sys
 import os
+import sys
+
+from certifire import app, auth, config, database, db, get_version
+from certifire.errors import CertifireError
+from certifire.plugins.acme import crypto
+from certifire.plugins.acme.models import Account, Certificate, Order
+from certifire.plugins.acme.plugin import (create_order, register, reorder,
+                                           revoke_certificate)
 
 logger = logging.getLogger(__name__)
 
 # Text
 DESCRIPTION = \
-"""
+    """
 Certifire {}.
 
 Interact with ACME certification authorities such as Let's Encrypt.
@@ -27,42 +24,41 @@ issue a certificate or two. Call a command with -h for more instructions.
 """.format(get_version())
 
 DESCRIPTION_REGISTER = \
-"""
+    """
 Creates a new account key and registers on the server. The resulting --account
-is saved in the specified file, and required for most other operations.
+is saved in the database, and required for most other operations.
 
-You only have to do this once. Keep the account file safe and secure: it
-contains your private key, and you need it to get certificates!
-"""
+Takes email as required argument
 
-DESCRIPTION_AUTHORIZE = \
-"""
-Authorizes a domain or multiple domains for your account through DNS or HTTP
-verification. You will need to set up DNS records or HTTP files as prompted.
+You can pass arguments like organization, organizational_unit, country, state,
+and location for csr generations from this account. if not provided, default
+values from the config file will be used 
 
-After authorizing a domain, you can issue certificates for it. Authorizations
-can last for a long time, so you might not need to do this every time you want
-a new certificate.  This depends on the server being used. You should see an
-expiration date for the authorization after completion.
+You can also pass your own RSA private key if needed
+(Provide key size 2048 and above, otherwise the server won't accept it.)
 
-If a domain is already authorized, the authorization's expiration date will be
-printed.
+You only have to do this once.
 """
 
 DESCRIPTION_ISSUE = \
-"""
-Issues a certificate for one or more domains. Hopefully needless to say, you
-must have valid authorizations for the domains you specify first.
+    """
+Issues a certificate for one or more domains. Firstly, domains passed will be
+authorized by the type of authentication specified. If dns authentication
+is used, also provide the dns provider. If type and dns provider not passed,
+default values will be used from the config file
+
+Takes account_id as required argument
+
+You can pass arguments like organization, organizational_unit, country, state,
+and location for csr generations from this account. if not provided, default
+values from the account will be used 
 
 This will generate a new RSA key and CSR for you. But if you want, you can
-bring your own with the --key-file and --csr-file attributes. You can also set
-a custom --key-size. (Don't try something stupid like 512, the server won't
-accept it. I tried.)
+bring your own with the --key-file and --csr-file attributes. 
+(Provide key size 2048 and above, otherwise the server won't accept it.)
 
-The resulting key and certificate are written into domain.pem and domain.crt.
-A chained certificate with the intermediate included is also written to
-domain.chain.crt. You can change the --output directory to something else from
-the working directory as well.
+The resulting key and certificate are written into the database.
+A chained certificate with the intermediate included is also written to databse.
 
 (If you're passing your own CSR, the given domains can be whatever you want.)
 
@@ -74,102 +70,83 @@ Certificate issuance has a server-side rate limit. Don't overdo it.
 """
 
 DESCRIPTION_REVOKE = \
-"""
+    """
 Revokes a certificate. The certificate must have been issued using the
 current account.
-"""
 
-DESCRIPTION_INFO = \
+Takes account_id and certificate_id as required arguments
 """
-Display registration info for the current account.
-"""
-
-# Defaults
-#LETS_ENCRYPT_PRODUCTION = "https://acme-v02.api.letsencrypt.org/"
-LETS_ENCRYPT_PRODUCTION = "https://acme-staging-v02.api.letsencrypt.org/"
-DEFAULT_ACCOUNT_PATH = 'account.json'
-DEFAULT_CERT_KEY_SIZE = 4096
-
 
 # Command handlers
+
+
 def _register(args):
-    print(register(
-        server=args.server,
+    key = None
+    if args.key_file:
+        with open(args.key_file, 'rb') as f:
+            key = crypto.load_private_key(f.read())
+
+    ret, act_id = register(
+        user_id=1,
         email=args.email,
-        key_file=args.key_file
-    ))
+        server=args.server,
+        rsa_key=key,
+        organization=args.organization,
+        organizational_unit=args.organizational_unit,
+        country=args.country,
+        state=args.state,
+        location=args.location)
 
-
-def _authorize(args):
-    account = load_account(args.account)
-    verbose = False
-    if args.verbose > 0:
-        verbose = True
-    print(authorize(account, args.domain, args.method, verbose))
+    if ret:
+        print("Account created with account id: {}".format(act_id))
+        print("Pass this account id for issue, revoke, etc...")
+    else:
+        print("Account with same email exists: account id: {}".format(act_id))
 
 
 def _issue(args):
-    account = load_account(args.account)
-    order = Order.query.get(args.order)
-    verbose = False
-    if args.verbose > 0:
-        verbose = True
-    print(issue(
-        account=account,
-        order=order,
-        key_size=args.key_size,
-        key_file=args.key_file,
-        csr_file=args.csr_file,
-        output_path=args.output,
-        must_staple=args.ocsp_must_staple,
-        verbose=verbose
-    ))
+    key = None
+    if args.key_file:
+        with open(args.key_file, 'rb') as f:
+            key = crypto.load_private_key(f.read())
+    csr = None
+    if args.csr_file:
+        with open(args.csr_file, 'rb') as f:
+            key = crypto.load_csr(f.read())
+
+    ret, order_id = create_order(
+        account_id=args.account,
+        domains=args.domains,
+        type=args.type,
+        provider=args.provider,
+        email=args.email,
+        organization=args.organization,
+        organizational_unit=args.organizational_unit,
+        country=args.country,
+        state=args.state,
+        location=args.location,
+        reissue=False,
+        csr=csr,
+        key=key)
+
+    if ret:
+        print("Order created with order id: {}".format(order_id))
+    else:
+        print("Order creation failed.")
 
 
 def _revoke(args):
     certdb = Certificate.query.get(args.certificate)
-    print(revoke(certdb))
+    if not certdb:
+        print("There is no such certificate {}".format(args.certificate))
+        return
 
+    order = Order.query.get(certdb.order_id)
+    if not order:
+        print("Order for this certificate not found")
+        return
 
-def _info(args):
-    paths = get_paths()
-    account = load_account(args.account)
-    info(args.server, account, paths)
-
-
-def get_paths():
-    current_path = os.getcwd()
-    return {
-        'authorizations': os.path.join(current_path, "authorizations"),
-        'current': current_path,
-        'orders': os.path.join(current_path, "orders"),
-    }
-
-
-def get_meta_paths(path):
-    return {
-        'orders': os.path.join(path, "orders"),
-        'authorizations': os.path.join(path, "authorizations"),
-    }
-
-
-def load_account(id=1):
-    # Show a more descriptive message if the file doesn't exist.
-    """if not os.path.exists(path):
-        logger.error("Couldn't find an account file at {}.".format(path))
-        logger.error("Are you in the right directory? Did you register yet?")
-        logger.error("Run 'automatoes -h' for instructions.")
-        raise CertifireError()
-
-    try:
-        with open(path, 'rb') as f:
-            return Account.deserialize(f.read())
-    except (ValueError, IOError) as e:
-        logger.error("Couldn't read account file. Aborting.")
-        raise CertifireError(e)"""
-    account = Account.query.get(id)
-    account.initialize()
-    return account 
+    revoke_certificate(order.account_id, certdb.id)
 
 
 class Formatter(argparse.ArgumentDefaultsHelpFormatter,
@@ -177,24 +154,12 @@ class Formatter(argparse.ArgumentDefaultsHelpFormatter,
     pass
 
 
-# Where it all begins.
 def certifire_main():
     parser = argparse.ArgumentParser(
         description=DESCRIPTION,
         formatter_class=Formatter,
     )
     subparsers = parser.add_subparsers()
-
-    # Server switch
-    parser.add_argument('--server', '-s', help="The ACME server to use",
-                        default=LETS_ENCRYPT_PRODUCTION)
-    parser.add_argument('--account', '-a',
-                        help="The account file to use or create",
-                        default=DEFAULT_ACCOUNT_PATH)
-
-    # Verbosity
-    parser.add_argument('--verbose', '-v', action="count",
-                        help="Set verbose mode", default=0)
 
     # Account creation
     register = subparsers.add_parser(
@@ -203,55 +168,55 @@ def certifire_main():
         description=DESCRIPTION_REGISTER,
         formatter_class=Formatter,
     )
-    register.add_argument('email', type=str, help="Account e-mail address")
+    register.add_argument('email', type=str, help="Account email address")
+    register.add_argument('--server', '-i', help="ACME Server url")
     register.add_argument('--key-file', '-k',
                           help="Existing key file to use for the account")
+    register.add_argument('--organization', '-o', help="Name of organization")
+    register.add_argument('--organizational_unit', '-u',
+                          help="Name of organizational unit")
+    register.add_argument('--country', '-c', help="Name of country")
+    register.add_argument('--state', '-s', help="Name of state")
+    register.add_argument('--location', '-l', help="Name of location")
     register.set_defaults(func=_register)
-
-    # Domain verification
-    authorize = subparsers.add_parser(
-        'authorize',
-        help="Verify domain ownership",
-        description=DESCRIPTION_AUTHORIZE,
-        formatter_class=Formatter,
-    )
-    authorize.add_argument('domain',
-                           help="One or more domain names to authorize",
-                           nargs='+')
-    authorize.add_argument('--method',
-                           '-m',
-                           help="Authorization method",
-                           choices=('dns', 'http'),
-                           default='dns')
-    authorize.set_defaults(func=_authorize)
 
     # Certificate issuance
     issue = subparsers.add_parser(
         'issue',
-        help="Request a new certificate",
+        help="Authorize and Request a new certificate",
         description=DESCRIPTION_ISSUE,
         formatter_class=Formatter,
     )
-    issue.add_argument(
-        'order',
-        help="Order id to issue certificate")
-    issue.add_argument('--key-size', '-b',
-                       help="The key size to use for the certificate",
-                       type=int, default=DEFAULT_CERT_KEY_SIZE)
+    issue.add_argument('--account', '-a',
+                       help="The acme account id to use", required=True)
+    issue.add_argument('domains',
+                       help="One or more domain names to authorize", nargs='+')
+
+    issue.add_argument('--type',
+                       '-t',
+                       help="Authorization type",
+                       choices=('dns', 'http'),
+                       default='dns')
+
+    issue.add_argument('--provider',
+                       '-p',
+                       help="DNS Provider",
+                       choices=config.VALID_DNS_PROVIDERS,
+                       default=config.VALID_DNS_PROVIDERS[0])
+
     issue.add_argument('--key-file', '-k',
                        help="Existing key file to use for the certificate")
+
     issue.add_argument('--csr-file', help="Existing signing request to use")
-    issue.add_argument('--output', '-o',
-                       help="The output directory for created objects",
-                       default='.')
-    issue.add_argument('--ocsp-must-staple',
-                       dest='ocsp_must_staple',
-                       help="CSR: Request OCSP Must-Staple extension",
-                       action='store_true')
-    issue.add_argument('--no-ocsp-must-staple',
-                       dest='ocsp_must_staple',
-                       help=argparse.SUPPRESS,
-                       action='store_false')
+
+    issue.add_argument('--email', '-e', help="email address for CSR")
+    issue.add_argument('--organization', '-o', help="Name of organization")
+    issue.add_argument('--organizational_unit', '-u',
+                       help="Name of organizational unit")
+    issue.add_argument('--country', '-c', help="Name of country")
+    issue.add_argument('--state', '-s', help="Name of state")
+    issue.add_argument('--location', '-l', help="Name of location")
+
     issue.set_defaults(func=_issue, ocsp_must_staple=False)
 
     # Certificate revocation
@@ -261,33 +226,24 @@ def certifire_main():
         description=DESCRIPTION_REVOKE,
         formatter_class=Formatter,
     )
-    revoke.add_argument("certificate", help="The certificate file to revoke")
+    revoke.add_argument("certificate", help="The certificate id to revoke")
+    revoke.add_argument('--account', '-a',
+                        help="The acme account id to use", required=True)
     revoke.set_defaults(func=_revoke)
-
-    # Account info
-    info = subparsers.add_parser(
-        'info',
-        help="Display account information",
-        description=DESCRIPTION_INFO,
-        formatter_class=Formatter,
-    )
-    info.set_defaults(func=_info)
 
     # Version
     version = subparsers.add_parser("version", help="Show the version number")
-    version.set_defaults(func=lambda *args: logger.info(
-        "automatoes {}\n\nThis tool is a full manuale "
-        "replacement.\nJust run manuale instead of automatoes"
-        ".".format(get_version())))
+    version.set_defaults(func=lambda *args: print(
+        "certifire {}\n".format(get_version())))
 
     # Parse
     args = parser.parse_args()
     if not hasattr(args, 'func'):
         parser.print_help()
-        sys.exit(sysexits.EX_MISUSE)
+        sys.exit()
 
     # Set up logging
-    root = logging.getLogger('automatoes')
+    root = logging.getLogger('certifire')
     root.setLevel(logging.INFO)
     handler = logging.StreamHandler(sys.stderr)
     handler.setFormatter(logging.Formatter("%(message)s"))
@@ -299,12 +255,16 @@ def certifire_main():
     except CertifireError as e:
         if str(e):
             logger.error(e)
-        sys.exit(sysexits.EX_SOFTWARE)
+        sys.exit()
     except KeyboardInterrupt:
         logger.error("")
         logger.error("Interrupted.")
-        sys.exit(sysexits.EX_TERMINATED_BY_CRTL_C)
+        sys.exit()
     except Exception as e:
         logger.error("Oops! An unhandled error occurred. Please file a bug.")
         logger.exception(e)
-        sys.exit(sysexits.EX_CATCHALL)
+        sys.exit()
+
+
+if __name__ == "__main__":
+    certifire_main()

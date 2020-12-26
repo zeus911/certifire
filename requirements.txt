@@ -1,5 +1,6 @@
+acme
 boto3
-cartola
+botocore
 click
 cryptography
 Flask
@@ -9,11 +10,16 @@ Flask-SQLAlchemy
 inflection
 itsdangerous
 Jinja2
+josepy
 MarkupSafe
 psycopg2
 PyJWT
-requests
-SQLAlchemy
-Werkzeug
 pylint-flask
 pylint-flask-sqlalchemy
+PyOpenSSL
+pyrfc3339
+requests
+retrying
+SQLAlchemy
+Werkzeug
+urllib3

@@ -2,7 +2,7 @@ from typing import Any, Dict, Sequence, Union
 import base64
 from hashlib import sha256
 
-from .auth import ErrataItemType, DNSProviderBase
+from certifire.plugins.dns_providers.auth import ErrataItemType, DNSProviderBase
 
 def safe_base64(un_encoded_data: Union[str, bytes]) -> str:
     "return ACME-safe base64 encoding of un_encoded_data as a string"
@@ -92,3 +92,6 @@ class BaseDns(DNSProviderBase):
         This method should return None
         """
         raise NotImplementedError("delete_dns_record method must be implemented.")
+
+    def wait_for_change(self, change_id):
+        raise NotImplementedError("wait_for_change method must be implemented.")

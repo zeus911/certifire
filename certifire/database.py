@@ -63,6 +63,7 @@ def add(model):
     :return:
     """
     db.session.add(model)
+    db.session.commit()
 
 
 def get_model_column(model, field):

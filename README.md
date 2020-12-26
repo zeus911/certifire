@@ -99,7 +99,36 @@ To run certifire as a service:
     $ sudo systemctl daemon-reload
     $ sudo systemctl enable --now certifire
 
+Upgrading
+---------
+
+Databse migrations not implemented yet. You will have to drop the database and recreate
+for mid to high version chenges (eg. v0.1.0 to v0.2.0)
+
+!! Doing this will delete all your accounts and certificates, proceed with care !!
+
+    (certifire) $ certifire-manager drop_db
+    (certifire) $ git pull
+    (certifire) $ pip install -r requirements.txt
+    (certifire) $ python setup.py install
+    (certifire) $ certifire-manager init
+    (certifire) $ certifire-manager runserver
+
 API Documentation
 -----------------
 
 [API Documentation](./README_API.md)
+
+CLI Documentation
+-----------------
+
+Get interactive help from the CLI itself, run:
+
+    $ certifire --help
+    $ certifire register --help
+    $ certifire issue --help
+    $ certifire revoke --help
+
+To get current version of certifire:
+
+    $ certifire version
