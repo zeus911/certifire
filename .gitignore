@@ -17,6 +17,7 @@ bin/
 lib/
 lib64/
 dist/
+share/
 pyvenv.cfg
 .vscode/
 *.crt
