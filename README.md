@@ -1,4 +1,4 @@
-Certifire-Minimal
+Certifire
 =========
 
 Installation
