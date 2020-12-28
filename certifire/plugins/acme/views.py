@@ -40,7 +40,7 @@ def new_acme_account():
     rsa_key = None
     if key:
         rsa_key = crypto.load_private_key(key.encode('UTF-8'))
-    
+
     ret, account_id = register(user_id, email, server, rsa_key,
                                organization, organizational_unit, country, state, location)
     if ret:
@@ -117,17 +117,17 @@ def new_order():
 
     if g.user.id != account.user_id:
         return (jsonify({'status': 'This account does not belong to you!'}), 400)
-    
+
     pem_key = None
     if key:
         pem_key = crypto.load_private_key(key.encode('UTF-8'))
-    
+
     pem_csr = None
     if csr:
         pem_csr = crypto.load_csr(csr.encode('UTF-8'))
 
     ret, order_id = create_order(account.id, domains, type, provider, email,
-                        organization, organizational_unit, country, state, location, reissue, pem_csr, pem_key)
+                                 organization, organizational_unit, country, state, location, reissue, pem_csr, pem_key)
     if ret:
         return (jsonify({'status': 'New order created, Please wait some time before acessing the order', 'id': order_id}), 201,
                 {'Location': url_for('get_order', id=order_id, _external=True)})
@@ -179,6 +179,7 @@ def get_all_orders():
         data[order.id] = json.loads(order.json)
     return jsonify(data)
 
+
 @app.route('/api/certificate/<int:id>')
 @auth.login_required
 def get_cert(id):
@@ -192,6 +193,7 @@ def get_cert(id):
     ret = json.loads(certificate.json)
     return jsonify(ret)
 
+
 @app.route('/api/certificate')
 @auth.login_required
 def get_all_certificates():
@@ -200,6 +202,7 @@ def get_all_certificates():
     for cert in certs:
         data[cert.id] = json.loads(cert.json)
     return jsonify(data)
+
 
 @app.route('/api/certificate/<int:id>', methods=['DELETE'])
 @auth.login_required
@@ -220,6 +223,7 @@ def revoke_cert(id):
         return (jsonify({'status': status}), 200)
     else:
         return (jsonify({'status': status}), 201)
+
 
 @app.route('/api/certificate/<int:id>', methods=['PURGE'])
 @auth.login_required
