@@ -152,6 +152,24 @@ def get_order(id):
     else:
         return jsonify(ret)
 
+
+@app.route('/api/order/<int:id>', methods=['COPY'])
+@auth.login_required
+def re_order(id):
+    order = Order.query.get(id)
+    if not order:
+        abort(400)
+    if g.user.id != order.user_id:
+        return (jsonify({'status': 'This order does not belong to you!'}), 400)
+
+    ret, _ = reorder(order.account_id, order.id)
+
+    if ret:
+        return (jsonify({'status': 'Reordering', 'id': order.id}), 200)
+    else:
+        return (jsonify({'status': 'Failed', 'id': order.id}), 400)
+
+
 @app.route('/api/order')
 @auth.login_required
 def get_all_orders():
