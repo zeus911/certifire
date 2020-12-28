@@ -202,3 +202,23 @@ def revoke_cert(id):
         return (jsonify({'status': status}), 200)
     else:
         return (jsonify({'status': status}), 201)
+
+@app.route('/api/certificate/<int:id>', methods=['PURGE'])
+@auth.login_required
+def purge_cert(id):
+    certificate = Certificate.query.get(id)
+    if not certificate:
+        return (jsonify({'status': 'There is no such certificate!'}), 400)
+
+    if g.user.id != certificate.user_id:
+        return (jsonify({'status': 'This certificate does not belong to you!'}), 400)
+
+    order = Order.query.get(certificate.order_id)
+    if not order:
+        return (jsonify({'status': 'Order for this certificate not found'}), 400)
+    ret, status = revoke_certificate(order.account_id, certificate.id, True)
+
+    if ret:
+        return (jsonify({'status': status}), 200)
+    else:
+        return (jsonify({'status': status}), 201)

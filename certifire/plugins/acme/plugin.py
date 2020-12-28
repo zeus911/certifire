@@ -132,17 +132,32 @@ def reorder(account_id: int, order_id: int):
 def revoke_certificate(account_id: int, cert_id: int, delete: bool = False):
     account = Account.query.get(account_id)
     cert_db = Certificate.query.get(cert_id)
-    order_db = Order.query.get(cert_db.order_id)
+    
+    if cert_db:
+        order_db = Order.query.get(cert_db.order_id)
 
-    if cert_db.status == 'revoked':
-        status = "This certificate is already revoked"
+        if cert_db.status == 'revoked':
+            if delete:
+                database.delete(cert_db)
+                order_db.resolved_cert_id = None
+                database.add(order_db)
+                status = "Deleted already revoked certificate"
+                print(status)
+                return True, status
+
+            status = "This certificate is already revoked"
+            print(status)
+            return False, status
+
+        if order_db.account_id != account_id:
+            status = "This certificate does not belong to this account"
+            print(status)
+            return False, status
+
+        acme = AcmeDnsHandler(account.id)
+        return acme.revoke_certificate(cert_id, delete)
+    
+    else:
+        status = "Certificate with id: {} does not exist".format(cert_id)
         print(status)
         return False, status
-
-    if order_db.account_id != account_id:
-        status = "This certificate does not belong to this account"
-        print(status)
-        return False, status
-
-    acme = AcmeDnsHandler(account.id)
-    return acme.revoke_certificate(cert_id, delete)

@@ -265,12 +265,13 @@ class AcmeDnsHandler(AcmeHandler):
             print("Certificate {} revoked.".format(cert_db.id))
             order_db.status = 'revoked'
             cert_db.status = 'revoked'
-            database.add(order_db)
             if delete:
                 print("Deleting certificate from database")
                 database.delete(cert_db)
+                order_db.resolved_cert_id = None
             else:
                 database.add(cert_db)
+            database.add(order_db)
             status = 'Revoked'
             print(status)
             return True, status
