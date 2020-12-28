@@ -4,8 +4,8 @@ import os
 from certifire import app, auth, config, database, db
 from certifire.plugins.acme import crypto
 from certifire.plugins.acme.models import Account, Certificate, Order
-from certifire.plugins.acme.plugin import (create_order, register, reorder,
-                                           revoke_certificate)
+from certifire.plugins.acme.plugin import (create_order, deregister, register,
+                                           reorder, revoke_certificate)
 from flask import abort, g, jsonify, request, url_for
 
 
@@ -74,6 +74,22 @@ def get_all_acme_account():
     for act in accounts:
         data[act.id] = json.loads(act.json)
     return jsonify(data)
+
+
+@app.route('/api/acme/<int:id>', methods=['DELETE'])
+@auth.login_required
+def deregister_acme(id):
+    account = Account.query.get(id)
+    if not account:
+        abort(400)
+    if g.user.id != account.user_id:
+        return (jsonify({'status': 'This account does not belong to you!'}), 400)
+
+    ret, _ = deregister(g.user.id, account.id)
+    if ret:
+        return (jsonify({'status': 'Done'}), 200)
+    else:
+        return (jsonify({'status': 'Failed'}), 200)
 
 
 @app.route('/api/order', methods=['POST'])

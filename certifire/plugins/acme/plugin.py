@@ -52,6 +52,8 @@ def deregister(user_id:int, account_id: int):
     if acme.deregister_acme_account():
         database.delete(account)
         print("Done")
+    
+    return True, account_id
 
 def create_order(account_id: int,
                  domains: list,
