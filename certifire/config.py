@@ -1,6 +1,6 @@
 import os
 
-SQLALCHEMY_DATABASE_URI = 'postgresql://certifire:certifire@127.0.0.1:5432/certifire'
+SQLALCHEMY_DATABASE_URI = os.getenv('DB', 'postgresql://certifire:certifire@127.0.0.1:5432/certifire')
 CERTIFIRE_TOKEN_SECRET = 'loremipsum'
 CERTIFIRE_PATH = '~/.certifire'
 

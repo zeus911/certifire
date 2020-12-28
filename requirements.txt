@@ -12,7 +12,7 @@ itsdangerous
 Jinja2
 josepy
 MarkupSafe
-psycopg2
+psycopg2-binary
 PyJWT
 pylint-flask
 pylint-flask-sqlalchemy

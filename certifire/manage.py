@@ -15,13 +15,15 @@ def create_db():
 
 
 @manager.command
-def init():
+@manager.option('-p', '--passwd', dest='pwd', default='changeme')
+def init(pwd='changeme'):
     """Creates the db tables and admin user"""
     db.create_all()
     if users.User.query.filter_by(username='admin').first() is not None:
         print("Admin user already exists")
     else:
-        pwd = input("Enter password for admin user: ")
+        if not pwd:
+            pwd = input("Enter password for admin user: ")
         user = users.User('admin', pwd, True)
         database.add(user)
 
