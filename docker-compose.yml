@@ -16,15 +16,14 @@ services:
 
   certifire:
     build: .
-    #image: localhost/certifire
-    #container_name: certifire
     hostname: certifire
+    privileged: true
     depends_on:
       - postgres
     ports:
       - 5000:5000
     volumes:
-      - "/home/hawk/.aws:/home/certifire/.aws"
+      - "~/.aws:/home/certifire/.aws"
     restart:
       always
 
