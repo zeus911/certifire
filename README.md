@@ -9,6 +9,10 @@ Install dependencies
     $ sudo apt update && sudo apt upgrade
     $ sudo apt install git nginx awscli certbot python3-certbot-nginx
 
+Configure aws credentials for route53 dns:
+
+    $ aws configure
+
 <br>
 <details>
 <summary>Legacy Installation</summary>
@@ -127,10 +131,6 @@ Then restart nginx
 (optional) Run certbot for https - Instructions for ubuntu 20.04 server given
 
     $ sudo certbot --nginx
-
-Configure aws credentials for route53 dns:
-
-    $ aws configure
 
 ### Note
 
