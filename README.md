@@ -79,7 +79,21 @@ Then restart nginx
 Configure aws credentials for route53 dns:
 
     $ aws configure
-    
+
+### Note
+
+If you are hosting in an AWS EC2 instance, please make sure to edit the security groups,
+Network Access Control Lists to allow traffic for ports 80 and 443 and other shenanigans.
+
+More Info: [AWS Knowledge Center](https://aws.amazon.com/premiumsupport/knowledge-center/connect-http-https-ec2/)
+
+There are similar quirks if hosted in GCP. These works out of the box for hosting services like
+DigitalOcean, Linode etc...
+
+Then in the system, if you are using a firewall (defaultly enabled in rhel based systems), 
+you may need to open ports 80 and 433 
+
+
 Running
 -------
 
