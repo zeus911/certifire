@@ -49,7 +49,28 @@ After cloning, create a virtual environment and install the requirements. For Li
     $ source certifire/bin/activate
     $ cd certifire
     (certifire) $ pip install -r requirements.txt
+
+Make appropriate changes to [config.py](./certifire/config.py)
+
     (certifire) $ python setup.py install
+
+Running
+
+Change the password of admin account as required in the init commnd.
+To run the server use the following commands:
+
+    (certifire) $ certifire-manager init -p changeme
+    (certifire) $ certifire-manager runserver
+     * Running on http://127.0.0.1:5000/ (Press CTRL+C to quit)
+     * Restarting with reloader
+
+Now the server is ready to accept requests at https://api.certifire.xyz (or whatever you have configured)
+
+To run certifire as a service:
+
+    $ sudo cp certifire.service /etc/systemd/system/
+    $ sudo systemctl daemon-reload
+    $ sudo systemctl enable --now certifire
 
 </details>
 <br>
@@ -83,7 +104,7 @@ Run the container:
 
     $ docker-compose up -d
 
-Initialize database and admin accounts:
+Initialize database and admin accounts (change the password as you require):
 
     $ docker-compose exec server certifire-manager init -p changeme
 
@@ -128,7 +149,7 @@ Then restart nginx
 
     $ sudo systemctl restart nginx.service 
 
-(optional) Run certbot for https - Instructions for ubuntu 20.04 server given
+(optional) Run certbot for https
 
     $ sudo certbot --nginx
 
@@ -139,32 +160,12 @@ Network Access Control Lists to allow traffic for ports 80 and 443 and other she
 
 More Info: [AWS Knowledge Center](https://aws.amazon.com/premiumsupport/knowledge-center/connect-http-https-ec2/)
 
-There are similar quirks if hosted in GCP. These works out of the box for hosting services like
-DigitalOcean, Linode etc...
+There are similar quirks if hosted in GCP, ORACLE cloud etc.. 
+These works out of the box for hosting services like DigitalOcean, Linode etc...
 
 Then in the system, if you are using a firewall (defaultly enabled in rhel based systems), 
 you may need to open ports 80 and 433 
 
-
-Running
--------
-
-In postgresql, setup a database and make appropriate changes to [config.py](./certifire/config.py)
-Change the password of admin account as required in the init commnd.
-To run the server use the following commands:
-
-    (certifire) $ certifire-manager init -p changeme
-    (certifire) $ certifire-manager runserver
-     * Running on http://127.0.0.1:5000/ (Press CTRL+C to quit)
-     * Restarting with reloader
-
-Now the server is ready to accept requests at https://api.certifire.xyz (or whatever you have configured)
-
-To run certifire as a service:
-
-    $ sudo cp certifire.service /etc/systemd/system/
-    $ sudo systemctl daemon-reload
-    $ sudo systemctl enable --now certifire
 
 Upgrading
 ---------
