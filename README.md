@@ -4,18 +4,26 @@ Certifire
 Installation
 ------------
 
-Install dependencies
+Install dependencies: 
+
+(Debian/Ununtu and derivatives)
 
     $ sudo apt update && sudo apt upgrade
     $ sudo apt install git nginx awscli certbot python3-certbot-nginx
+
+(RHEL, CentOS, Fedora)
+
+    $ sudo dnf upgrade
+    $ sudo dnf install git nginx awscli certbot python3-certbot-nginx
 
 Configure aws credentials for route53 dns:
 
     $ aws configure
 
-<br>
+### Select one of the following methods
+
 <details>
-<summary>Legacy Installation</summary>
+<summary>Legacy Installation (Tested on Ubuntu 20.04)</summary>
 
 ### Legacy Installation
 
@@ -73,9 +81,9 @@ To run certifire as a service:
     $ sudo systemctl enable --now certifire
 
 </details>
-<br>
+
 <details>
-<summary>Docker Installation</summary>
+<summary>Docker Installation (Tested on Ubuntu 20.04)</summary>
 
 ### Docker Installation
 
@@ -113,9 +121,49 @@ If you want to stream the logs (You can press ctrl+c to quit streaming):
     $ docker-compose logs -tf server
 
 </details>
+
+<details>
+<summary>Podman Installation !Experimental! (Tested on CentOS 8 and Fedora 33)</summary>
+
+### Podman Installation
+
+Install docker and docker-compose
+
+    $ sudo dnf install podman podman-compose
+    $ sudo groupadd docker
+    $ sudo usermod -aG docker certifire
+
+Log out and Log back in so that your group membership is re-evaluated. 
+More info: [Docker Docs](https://docs.docker.com/engine/install/linux-postinstall/#manage-docker-as-a-non-root-user)
+
+You also may stop existing postgresql instance and certifire instance if present because,
+it will confilict with the postgres and certifire docker instance
+
+    $ sudo systemctl disable --now postgresql
+    $ sudo systemctl disable --now certifire
+
+Now we build our docker image
+
+    $ git clone https://github.com/certifire/certifire
+    $ cd certifire
+    $ podman-compose build
+
+Run the container:
+
+    $ podman-compose up -d
+
+Initialize database and admin accounts (change the password as you require):
+
+    $ podman exec -it certifire_server_1 certifire-manager init changeme
+
+If you want to stream the logs (You can press ctrl+c to quit streaming):
+
+    $ podman-compose logs -tf server
+
+</details>
 <br>
 
-Edit nginx configration for proxy
+Edit nginx configration for proxy (Ubuntu based conf shown, chane appropriately for rhel based systems)
 
     $ sudo nano /etc/nginx/sites-available/default
 
