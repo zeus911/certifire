@@ -84,9 +84,10 @@ Running
 -------
 
 In postgresql, setup a database and make appropriate changes to config.py
-To run the server use the following command:
+Change the password of admin account as required in the init commnd.
+To run the server use the following commands:
 
-    (certifire) $ certifire-manager init
+    (certifire) $ certifire-manager init -p changeme
     (certifire) $ certifire-manager runserver
      * Running on http://127.0.0.1:5000/ (Press CTRL+C to quit)
      * Restarting with reloader
