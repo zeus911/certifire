@@ -130,8 +130,6 @@ If you want to stream the logs (You can press ctrl+c to quit streaming):
 Install docker and docker-compose
 
     $ sudo dnf install podman podman-compose
-    $ sudo groupadd docker
-    $ sudo usermod -aG docker certifire
 
 Log out and Log back in so that your group membership is re-evaluated. 
 More info: [Docker Docs](https://docs.docker.com/engine/install/linux-postinstall/#manage-docker-as-a-non-root-user)
