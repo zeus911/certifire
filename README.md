@@ -97,7 +97,7 @@ you may need to open ports 80 and 433
 Running
 -------
 
-In postgresql, setup a database and make appropriate changes to config.py
+In postgresql, setup a database and make appropriate changes to [config.py](./certifire/config.py)
 Change the password of admin account as required in the init commnd.
 To run the server use the following commands:
 
