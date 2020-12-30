@@ -1,31 +1,13 @@
 ---
-version: '3.5'
+version: '3.7'
 services:
-  postgres:
-    image: postgres:latest
-    restart: always
-    environment:
-      POSTGRES_USER: certifire
-      POSTGRES_PASSWORD: certifire
-      POSTGRES_DB: certifire
-      POSTGRES_HOST: postgres 
-    ports:
-      - "5432:5432"
-    volumes:
-      - pg_data:/var/lib/postgresql/data
-
-  certifire:
+  server:
     build: .
+    command: python -m certifire.manage runserver
     hostname: certifire
-    privileged: true
-    depends_on:
-      - postgres
     ports:
       - 5000:5000
     volumes:
-      - "~/.aws:/home/certifire/.aws"
+      - .:/usr/src/app
     restart:
       always
-
-volumes:
-    pg_data: {}

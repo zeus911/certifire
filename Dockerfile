@@ -1,32 +1,14 @@
-FROM ubuntu
+FROM python:3.8.1-slim-buster
 
-ARG VERSION
-#ARG DB
-ENV VERSION master
-ENV VIRTUAL_ENV=/home/certifire/certifire
-ENV PATH="$VIRTUAL_ENV/bin:$PATH"
-#ENV DB=${DB}
+WORKDIR /usr/src/app
 
-ENV TZ=Asia/Kolkata
-RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
+# set environment variables
+ENV PYTHONDONTWRITEBYTECODE 1
+ENV PYTHONUNBUFFERED 1
 
-RUN apt update
-RUN apt upgrade -y
-RUN apt install -y python3-dev python3-pip python3-virtualenv libpq-dev build-essential libssl-dev libffi-dev
-RUN useradd -m -s /bin/bash -G sudo -c "Certifire API Server" certifire
-RUN echo "certifire:certifire" | chpasswd
-
-COPY . ${VIRTUAL_ENV}
-WORKDIR ${VIRTUAL_ENV}
-
-RUN pip3 install -U virtualenv
-RUN virtualenv -p python3 .
 RUN pip install --upgrade pip
-RUN pip install -r requirements.txt
-RUN python setup.py install
-# RUN echo "changeme" | certifire-manager init
 
-WORKDIR /home/certifire
-USER certifire
-ENTRYPOINT ["/home/certifire/certifire/docker-entrypoint.sh"]
-CMD ["certifire-manager","runserver"]
+# copy project
+COPY . /usr/src/app/
+
+RUN pip install -r requirements.txt
