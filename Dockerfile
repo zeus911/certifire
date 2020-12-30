@@ -8,6 +8,3 @@ RUN pip install -r requirements.txt
 RUN python setup.py install
 
 ENV DB 'postgresql://certifire:certifire@postgres:5432/certifire'
-
-# ENTRYPOINT ["/usr/src/app/docker-entrypoint.sh"]
-
