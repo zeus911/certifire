@@ -161,7 +161,8 @@ If you want to stream the logs (You can press ctrl+c to quit streaming):
 </details>
 <br>
 
-Edit nginx configration for proxy (Ubuntu based conf shown, chane appropriately for rhel based systems)
+Edit nginx configration for proxy 
+(Ubuntu based conf shown, change nginx conf path appropriately for rhel based systems)
 
     $ sudo nano /etc/nginx/sites-available/default
 
