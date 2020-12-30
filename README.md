@@ -4,17 +4,26 @@ Certifire
 Installation
 ------------
 
+Install dependencies
+
+    $ sudo apt update && sudo apt upgrade
+    $ sudo apt install git nginx awscli certbot python3-certbot-nginx
+
+<br>
+<details>
+<summary>Legacy Installation</summary>
+
+### Legacy Installation
+
 Create and switch to new user
     
     $ sudo useradd -m -s /bin/bash -G sudo -c "Certifire API Server" certifire
     $ sudo passwd certifire
     $ sudo su - certifire
 
-
 Install dependencies
 
-    $ sudo apt update && sudo apt upgrade
-    $ sudo apt install python3-dev python3-pip python3-virtualenv libpq-dev build-essential libssl-dev libffi-dev nginx git postgresql awscli certbot python3-certbot-nginx
+    $ sudo apt install python3-dev python3-pip python3-virtualenv libpq-dev build-essential libssl-dev libffi-dev postgresql
     $ sudo systemctl enable --now postgresql.service
 
 Setup Postgresql
@@ -37,6 +46,49 @@ After cloning, create a virtual environment and install the requirements. For Li
     $ cd certifire
     (certifire) $ pip install -r requirements.txt
     (certifire) $ python setup.py install
+
+</details>
+<br>
+<details>
+<summary>Docker Installation</summary>
+
+### Docker Installation
+
+Install docker and docker-compose
+
+    $ sudo apt install docker docker-compose
+    $ sudo groupadd docker
+    $ sudo usermod -aG docker certifire
+
+Log out and Log back in so that your group membership is re-evaluated. 
+More info: [Docker Docs](https://docs.docker.com/engine/install/linux-postinstall/#manage-docker-as-a-non-root-user)
+
+You also may stop existing postgresql instance and certifire instance if present because,
+it will confilict with the postgres and certifire docker instance
+
+    $ sudo systemctl disable --now postgresql
+    $ sudo systemctl disable --now certifire
+
+Now we build our docker image
+
+    $ git clone https://github.com/certifire/certifire
+    $ cd certifire
+    $ docker-compose build
+
+Run the container:
+
+    $ docker-compose up -d
+
+Initialize database and admin accounts:
+
+    $ docker-compose exec server certifire-manager init -p changeme
+
+If you want to stream the logs (You can press ctrl+c to quit streaming):
+
+    $ docker-compose logs -tf server
+
+</details>
+<br>
 
 Edit nginx configration for proxy
 
