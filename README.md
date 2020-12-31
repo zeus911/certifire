@@ -127,7 +127,7 @@ If you want to stream the logs (You can press ctrl+c to quit streaming):
 
 ### Podman Installation
 
-Install docker and docker-compose
+Install podman and podman-compose
 
     $ sudo dnf install podman podman-compose
 
