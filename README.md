@@ -6,7 +6,7 @@ Installation
 
 Install dependencies: 
 
-(Debian/Ununtu and derivatives)
+(Debian/Ubuntu and derivatives)
 
     $ sudo apt update && sudo apt upgrade
     $ sudo apt install git nginx awscli certbot python3-certbot-nginx
