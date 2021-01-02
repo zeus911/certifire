@@ -232,7 +232,7 @@ for mid to high version chenges (eg. v0.1.0 to v0.2.0)
 API Documentation
 -----------------
 
-[API Documentation](./README_API.md)
+[API Documentation](https://certifire.xyz/apiDocs)
 
 CLI Documentation
 -----------------
