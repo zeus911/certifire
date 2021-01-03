@@ -91,7 +91,7 @@ Install docker and docker-compose
 
     $ sudo apt install docker docker-compose
     $ sudo groupadd docker
-    $ sudo usermod -aG docker certifire
+    $ sudo usermod -aG docker ${USER}
 
 Log out and Log back in so that your group membership is re-evaluated. 
 More info: [Docker Docs](https://docs.docker.com/engine/install/linux-postinstall/#manage-docker-as-a-non-root-user)
@@ -100,7 +100,7 @@ You also may stop existing postgresql instance and certifire instance if present
 it will confilict with the postgres and certifire docker instance
 
     $ sudo systemctl disable --now postgresql
-    $ sudo systemctl disable --now ${USER}
+    $ sudo systemctl disable --now certifire
 
 Now we build our docker image
 
