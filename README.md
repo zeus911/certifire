@@ -100,7 +100,7 @@ You also may stop existing postgresql instance and certifire instance if present
 it will confilict with the postgres and certifire docker instance
 
     $ sudo systemctl disable --now postgresql
-    $ sudo systemctl disable --now certifire
+    $ sudo systemctl disable --now ${USER}
 
 Now we build our docker image
 
