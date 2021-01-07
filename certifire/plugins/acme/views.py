@@ -89,7 +89,7 @@ def deregister_acme(id):
     if ret:
         return (jsonify({'status': 'Done'}), 200)
     else:
-        return (jsonify({'status': 'Failed'}), 200)
+        return (jsonify({'status': 'Failed'}), 401)
 
 
 @app.route('/api/order', methods=['POST'])
