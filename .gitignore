@@ -24,3 +24,6 @@ pyvenv.cfg
 *.pem
 *.json
 orders/
+
+*.ipynb
+.ipynb_checkpoints/
