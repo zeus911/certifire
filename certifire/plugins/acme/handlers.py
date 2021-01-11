@@ -8,6 +8,7 @@ import josepy as jose
 from certifire import config, database
 from certifire.plugins.acme import crypto
 from certifire.plugins.acme.models import Account, Certificate, Order
+from certifire.plugins.destinations.models import Destination
 from certifire.plugins.dns_providers.plugin import get_dns_provider
 from retrying import retry
 
@@ -97,15 +98,12 @@ class AcmeHandler:
 
         csr_pem, key = crypto.create_csr(csr_config)
         return csr_pem, key
-
-
-class AcmeDnsHandler(AcmeHandler):
-
-    def get_pending_challenges(self, order):
+    
+    def get_pending_challenges(self, order, type):
         pending_challenges = {}
         for authz in order.authorizations:
             for challenge in authz.body.challenges:
-                if challenge.typ == 'dns-01':
+                if challenge.typ == type:
                     if challenge.status.name == 'pending':
                         print("Pending challenge: TXT {} for domain {}".format(
                             challenge.validation(self.key), authz.body.identifier.value))
@@ -124,10 +122,88 @@ class AcmeDnsHandler(AcmeHandler):
         for url in order.authorizations:
             authorizations.append(self.client._authzr_from_response(self.client._post_as_get(url), uri=url))
         return orderr.update(authorizations=authorizations)
+
+    def issue_certificate(self, final_order, order_id, destination_id=None):
+        order_db = Order.query.get(order_id)
+        cert_db = Certificate(user_id=order_db.user_id, order_id=order_db.id, status='pending',
+                              csr=order_db.csr, private_key=order_db.key)
+        database.add(cert_db)
+
+        pem_certificate, pem_chain = crypto.extract_cert_and_chain(
+            final_order.fullchain_pem)
+        certificate = crypto.load_pem_certificate(pem_certificate.encode())
+        chain = crypto.load_pem_certificate(pem_chain.encode())
+
+        cert_db.body = crypto.export_pem_certificate(
+            certificate).decode('UTF-8')
+        cert_db.chain = crypto.export_pem_certificate(
+            certificate).decode('UTF-8')
+        cert_db.chain += crypto.export_pem_certificate(chain).decode('UTF-8')
+        cert_db.intermediate = crypto.export_pem_certificate(
+            chain).decode('UTF-8')
+        cert_db.expiry = certificate.not_valid_after.strftime(
+            config.EXPIRATION_FORMAT)
+        cert_db.fingerprint = binascii.hexlify(
+            certificate.fingerprint(crypto.hashes.SHA256())).decode('ascii')
+
+        print("Expires: {}".format(cert_db.expiry))
+        print("SHA256: {}".format(cert_db.fingerprint))
+
+        order_db.status = 'valid'
+        cert_db.status = 'valid'
+        order_db.resolved_cert_id = cert_db.id
+        print("Resolved certificate id: {}".format(order_db.resolved_cert_id))
+
+        if destination_id:
+            destination_db = Destination.query.get(destination_id)
+            if destination_db.certDestinationPath:
+                destination_db.upload(cert_db.body, cert_db.private_key, cert_db.intermediate)
+
+
+        database.add(order_db)
+        database.add(cert_db)
+
+        return cert_db.id
+    
+    def revoke_certificate(self, cert_id, delete=False):
+        cert_db = Certificate.query.get(cert_id)
+        order_db = Order.query.get(cert_db.order_id)
         
+        if cert_db.status == 'revoked':
+            status = "This certificate is already revoked"
+            print(status)
+            return False, status
+
+        certificate = crypto.load_pem_certificate(cert_db.body.encode('ASCII'))
+        print("Revoking certificate for:")
+        for domain in crypto.get_certificate_domains(certificate):
+            print("     {}".format(domain))
+        
+        certificate = crypto.load_cert_for_revoke(cert_db.body.encode('ASCII'))
+        try:
+            self.client.revoke(certificate,0)
+            print("Certificate {} revoked.".format(cert_db.id))
+            order_db.status = 'revoked'
+            cert_db.status = 'revoked'
+            if delete:
+                print("Deleting certificate from database")
+                database.delete(cert_db)
+                order_db.resolved_cert_id = None
+            else:
+                database.add(cert_db)
+            database.add(order_db)
+            status = 'Revoked'
+            print(status)
+            return True, status
+        except IOError:
+            status = "Revoke failed"
+            print(status)
+            return False, status
+
+class AcmeDnsHandler(AcmeHandler):
 
     # @retry(stop_max_attempt_number=5, wait_fixed=10)
-    def create_order(self, csr_pem, provider, order_id, reissue=False):
+    def create_order(self, csr_pem, provider, order_id, destination_id, reissue=False):
         order_db = Order.query.get(order_id)
         if order_db.status == 'revoked' and not reissue:
             print("Cannot issue for order with revoked certificate {}".format(order_db.resolved_cert_id))
@@ -138,7 +214,7 @@ class AcmeDnsHandler(AcmeHandler):
             self.revoke_certificate(order_db.resolved_cert_id)
 
         order = self.client.new_order(csr_pem)
-        pending_challenges = self.get_pending_challenges(order)
+        pending_challenges = self.get_pending_challenges(order, 'dns-01')
 
         if not pending_challenges:
             if reissue:
@@ -147,7 +223,7 @@ class AcmeDnsHandler(AcmeHandler):
                 order_db.contents = json.dumps(final_order.to_json())
                 order_db.status = 'ready'
                 database.add(order_db)
-                cert_id = self.issue_certificate(final_order, order_id)
+                cert_id = self.issue_certificate(final_order, order_id, destination_id)
 
                 return cert_id
 
@@ -159,7 +235,7 @@ class AcmeDnsHandler(AcmeHandler):
                     return order_db.resolved_cert_id
                 else:
                     print("Generating Certificate")
-                    return self.issue_certificate(orderr, order_id)
+                    return self.issue_certificate(orderr, order_id, destination_id)
             else:
                 print("Reissuing certificate")
 
@@ -206,77 +282,89 @@ class AcmeDnsHandler(AcmeHandler):
         for domain, challenge in pending_challenges.items():
             dns.delete_dns_record(domain, challenge.validation(self.key))
 
-        cert_id = self.issue_certificate(final_order, order_id)
+        cert_id = self.issue_certificate(final_order, order_id, destination_id)
 
         return cert_id
 
-    def issue_certificate(self, final_order, order_id):
+class AcmeHttpHandler(AcmeHandler):
+
+    def create_order(self, csr_pem, provider, order_id, destination_id, reissue=False):
         order_db = Order.query.get(order_id)
-        cert_db = Certificate(user_id=order_db.user_id, order_id=order_db.id, status='pending',
-                              csr=order_db.csr, private_key=order_db.key)
-        database.add(cert_db)
-
-        pem_certificate, pem_chain = crypto.extract_cert_and_chain(
-            final_order.fullchain_pem)
-        certificate = crypto.load_pem_certificate(pem_certificate.encode())
-        chain = crypto.load_pem_certificate(pem_chain.encode())
-
-        cert_db.body = crypto.export_pem_certificate(
-            certificate).decode('UTF-8')
-        cert_db.chain = crypto.export_pem_certificate(
-            certificate).decode('UTF-8')
-        cert_db.chain += crypto.export_pem_certificate(chain).decode('UTF-8')
-        cert_db.intermediate = crypto.export_pem_certificate(
-            chain).decode('UTF-8')
-        cert_db.expiry = certificate.not_valid_after.strftime(
-            config.EXPIRATION_FORMAT)
-        cert_db.fingerprint = binascii.hexlify(
-            certificate.fingerprint(crypto.hashes.SHA256())).decode('ascii')
-
-        print("Expires: {}".format(cert_db.expiry))
-        print("SHA256: {}".format(cert_db.fingerprint))
-
-        order_db.status = 'valid'
-        cert_db.status = 'valid'
-        order_db.resolved_cert_id = cert_db.id
-        print("Resolved certificate id: {}".format(order_db.resolved_cert_id))
-        database.add(order_db)
-        database.add(cert_db)
-
-        return cert_db.id
-    
-    def revoke_certificate(self, cert_id, delete=False):
-        cert_db = Certificate.query.get(cert_id)
-        order_db = Order.query.get(cert_db.order_id)
+        destination_db = Destination.query.get(destination_id)
+        if order_db.status == 'revoked' and not reissue:
+            print("Cannot issue for order with revoked certificate {}".format(order_db.resolved_cert_id))
+            return order_db.resolved_cert_id
         
-        if cert_db.status == 'revoked':
-            status = "This certificate is already revoked"
-            print(status)
-            return False, status
+        if order_db.status == 'valid' and reissue:
+            print("Revoking existing certificate {}".format(order_db.resolved_cert_id))
+            self.revoke_certificate(order_db.resolved_cert_id)
 
-        certificate = crypto.load_pem_certificate(cert_db.body.encode('ASCII'))
-        print("Revoking certificate for:")
-        for domain in crypto.get_certificate_domains(certificate):
-            print("     {}".format(domain))
+        order = self.client.new_order(csr_pem)
+        pending_challenges = self.get_pending_challenges(order, 'http-01')
         
-        certificate = crypto.load_cert_for_revoke(cert_db.body.encode('ASCII'))
-        try:
-            self.client.revoke(certificate,0)
-            print("Certificate {} revoked.".format(cert_db.id))
-            order_db.status = 'revoked'
-            cert_db.status = 'revoked'
-            if delete:
-                print("Deleting certificate from database")
-                database.delete(cert_db)
-                order_db.resolved_cert_id = None
+        if not pending_challenges:
+            if reissue:
+                deadline = datetime.datetime.now() + datetime.timedelta(seconds=10)
+                final_order = self.client.poll_and_finalize(order, deadline)
+                order_db.contents = json.dumps(final_order.to_json())
+                order_db.status = 'ready'
+                database.add(order_db)
+                cert_id = self.issue_certificate(final_order, order_id, destination_id)
+
+                return cert_id
+
+            print("No pending challenges, reusing existing order")
+            orderr = self.get_orderResource(order_id)
+            if orderr.fullchain_pem is not None:
+                if order_db.resolved_cert_id:
+                    print("Certificate already issued")
+                    return order_db.resolved_cert_id
+                else:
+                    print("Generating Certificate")
+                    return self.issue_certificate(orderr, order_id, destination_id)
             else:
-                database.add(cert_db)
-            database.add(order_db)
-            status = 'Revoked'
-            print(status)
-            return True, status
-        except IOError:
-            status = "Revoke failed"
-            print(status)
-            return False, status
+                print("Reissuing certificate")
 
+        order_db.uri = order.uri
+        order_db.contents = json.dumps(order.to_json())
+        database.add(order_db)
+
+        destination_db = Destination.query.get(destination_id)
+        print("Writing TXT Records")
+        for domain, challenge in pending_challenges.items():
+            chall_path = challenge.chall.path
+            response, validation = challenge.response_and_validation(self.key)
+            destination_db.upload_acme_token(chall_path,validation)
+        time.sleep(5)
+
+        for domain, challenge in pending_challenges.items():
+            response = challenge.response(self.key)
+            verified = response.simple_verify(
+                challenge.chall, domain, self.key.public_key())
+            if not verified:
+                print("{} not verified".format(domain))
+            
+            #res = self.client.answer_challenge(challenge, response)
+            time.sleep(5)
+            print("Ansering challenge {} with response {}".format(
+                challenge.validation(self.key), response.key_authorization))
+            res = self.client.answer_challenge(challenge, response)
+            print("Got response: {}".format(res.body.status.name))
+
+        print("Finalizing order")
+        deadline = datetime.datetime.now() + datetime.timedelta(seconds=10 *
+                                                                len(pending_challenges))
+        #final_order = self.client.finalize_order(order, deadline)
+        final_order = self.client.poll_and_finalize(order, deadline)
+        order_db.contents = json.dumps(final_order.to_json())
+        order_db.status = 'ready'
+        database.add(order_db)
+
+        print("Deleting TXT Records")
+        for domain, challenge in pending_challenges.items():
+            chall_path = challenge.chall.path
+            destination_db.delete_acme_token(chall_path)
+
+        cert_id = self.issue_certificate(final_order, order_id, destination_id)
+
+        return cert_id

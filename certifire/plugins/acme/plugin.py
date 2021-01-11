@@ -3,8 +3,9 @@ from threading import Thread
 
 from certifire import config, database, db
 from certifire.plugins.acme import crypto
-from certifire.plugins.acme.handlers import AcmeDnsHandler
+from certifire.plugins.acme.handlers import AcmeDnsHandler, AcmeHttpHandler
 from certifire.plugins.acme.models import Account, Certificate, Order
+from certifire.plugins.destinations.models import Destination
 
 
 def register(user_id=1, email: str = None, server: str = None, rsa_key=None,
@@ -56,7 +57,8 @@ def deregister(user_id:int, account_id: int):
     return True, account_id
 
 def create_order(account_id: int,
-                 domains: list,
+                 destination_id: int = None,
+                 domains: list = None,
                  type: str = None,
                  provider: str = None,
                  email: str = None,
@@ -82,11 +84,25 @@ def create_order(account_id: int,
     state = state if state else account.state
     location = location if location else account.location
 
-    if provider not in config.VALID_DNS_PROVIDERS:
-        print("Invalid DNS Provider")
-        return False, 0
+    if type == 'dns':
+        if provider not in config.VALID_DNS_PROVIDERS:
+            print("Invalid DNS Provider")
+            return False, 0
+        acme = AcmeDnsHandler(account.id)
+    if type == 'sftp':
+        acme = AcmeHttpHandler(account.id)
 
-    acme = AcmeDnsHandler(account.id)
+    if not domains:
+        if not destination_id:
+            print("No domains or destinations provided")
+            return False, 0
+        destination_db = Destination.query.get(destination_id)
+        domains = [destination_db.host]
+    else:
+        if destination_id:
+            destination_db = Destination.query.get(destination_id)
+            if destination_db.host not in domains:
+                domains = [destination_db.host] + domains
 
     domains_hash = hashlib.sha256(
         "_".join(domains).encode("ascii")).hexdigest()
@@ -97,22 +113,22 @@ def create_order(account_id: int,
                 order.uri, email, account.id))
             #acme_order = acme.create_order(order.csr, order.provider, order.id)
             Thread(target=acme.create_order, args=(
-                order.csr, order.provider, order.id, reissue)).start()
+                order.csr, order.provider, order.id, destination_id, reissue)).start()
             return False, order.id
 
-    if type == 'dns':
-        if not csr or key:
-            csr, key = acme.generate_csr(
-                domains, email, organization, organizational_unit, country, state, location)
 
-        order = Order(domains, type, provider, account.id, account.user_id, domains_hash,
-                      csr, key, email, organization, organizational_unit, country, state, location)
-        database.add(order)
+    if not csr or key:
+        csr, key = acme.generate_csr(
+            domains, email, organization, organizational_unit, country, state, location)
 
-        #acme_order = acme.create_order(csr, provider, order.id)
-        Thread(target=acme.create_order, args=(
-            csr, provider, order.id)).start()
-        return True, order.id
+    order = Order(destination_id, domains, type, provider, account.id, account.user_id, domains_hash,
+                  csr, key, email, organization, organizational_unit, country, state, location)
+    database.add(order)
+
+    #acme_order = acme.create_order(csr, provider, order.id)
+    Thread(target=acme.create_order, args=(
+        csr, provider, order.id, destination_id)).start()
+    return True, order.id
 
 
 def reorder(account_id: int, order_id: int):
@@ -123,9 +139,12 @@ def reorder(account_id: int, order_id: int):
         print("This order does not belong to this account")
         return False, order_id
 
-    acme = AcmeDnsHandler(account.id)
+    if order_db.type == 'dns':
+        acme = AcmeDnsHandler(account.id)
+    elif order_db.type == 'sftp':
+        acme = AcmeHttpHandler(account.id)
     Thread(target=acme.create_order, args=(order_db.csr,
-                                           order_db.provider, order_db.id, True)).start()
+                            order_db.provider, order_db.id, order_db.destination_id, True)).start()
     return True, order_db.id
 
 

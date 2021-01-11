@@ -6,6 +6,7 @@ from certifire.plugins.acme import crypto
 from certifire.plugins.acme.models import Account, Certificate, Order
 from certifire.plugins.acme.plugin import (create_order, deregister, register,
                                            reorder, revoke_certificate)
+from certifire.plugins.destinations.models import Destination
 from flask import abort, g, jsonify, request, url_for
 
 
@@ -98,6 +99,7 @@ def new_order():
     post_data = request.get_json(force=True)
     domains = post_data.get('domains')
     account = post_data.get('account')
+    destination = post_data.get('destination')
     type = post_data.get('type')
     provider = post_data.get('provider')
     email = post_data.get('email')
@@ -110,8 +112,14 @@ def new_order():
     key = post_data.get('key')
     reissue = post_data.get('reissue')
 
-    if domains is None or domains == []:
-        return (jsonify({'status': 'Provide atleast one domain'}), 400)
+    if not destination:
+        if domains is None or domains == []:
+            return (jsonify({'status': 'Provide atleast one domain or destination'}), 400)
+    else:
+        destination_db = Destination.query.get(destination)
+        if g.user.id != destination_db.user_id:
+            return (jsonify({'status': 'This destination does not belong to you!'}), 400)
+
 
     account = Account.query.get(account)
 
@@ -126,7 +134,7 @@ def new_order():
     if csr:
         pem_csr = crypto.load_csr(csr.encode('UTF-8'))
 
-    ret, order_id = create_order(account.id, domains, type, provider, email,
+    ret, order_id = create_order(account.id, destination, domains, type, provider, email,
                                  organization, organizational_unit, country, state, location, reissue, pem_csr, pem_key)
     if ret:
         return (jsonify({'status': 'New order created, Please wait some time before acessing the order', 'id': order_id}), 201,

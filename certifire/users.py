@@ -20,6 +20,7 @@ class User(db.Model):
     user_acme_account = relationship("Account", foreign_keys="Account.user_id")
     order_account = relationship("Order", foreign_keys="Order.user_id")
     certificate_account = relationship("Certificate", foreign_keys="Certificate.user_id")
+    user_destination = relationship("Destination", foreign_keys="Destination.user_id")
 
     def __init__(self, username, password, is_admin=False):
         self.username = username

@@ -76,6 +76,7 @@ class Order(db.Model):
     type = Column(Text())
     provider = Column(Text())
     domains = Column(Text())
+    destination_id = Column(Integer, ForeignKey("destinations.id"))
     account_id = Column(Integer, ForeignKey("acme_account.id"))
     user_id = Column(Integer, ForeignKey("users.id"))
     status = Column(String(16), nullable=False)
@@ -94,8 +95,9 @@ class Order(db.Model):
 
     certificate_order = relationship("Certificate", foreign_keys="Certificate.order_id")
 
-    def __init__(self, domains: list, type, provider, account_id, user_id=1, hash=None, csr=None, key=None, 
+    def __init__(self, destination_id:int, domains: list, type, provider, account_id, user_id=1, hash=None, csr=None, key=None, 
                 email=None, organization=None, organizational_unit=None, country=None, state=None, location=None):
+        self.destination_id = destination_id
         self.domains = ','.join(domains)
         self.type = type
         self.provider = provider

@@ -9,6 +9,7 @@ from certifire.plugins.acme import crypto
 from certifire.plugins.acme.models import Account, Certificate, Order
 from certifire.plugins.acme.plugin import (create_order, register, reorder,
                                            revoke_certificate)
+from certifire.plugins.destinations.models import Destination
 
 logger = logging.getLogger(__name__)
 
@@ -116,6 +117,7 @@ def _issue(args):
 
     ret, order_id = create_order(
         account_id=args.account,
+        destination_id=args.destination,
         domains=args.domains,
         type=args.type,
         provider=args.provider,
@@ -148,6 +150,62 @@ def _revoke(args):
 
     revoke_certificate(order.account_id, certdb.id)
 
+def _create_dest(args):
+    pkey = None
+    if args.pkey:
+        with open(args.pkey, 'rb') as f:
+            pkey = crypto.load_private_key(f.read())
+    dest = Destination(user_id=1,
+                host=args.host,
+                port=args.port,
+                user=args.user,
+                password=args.pwd,
+                ssh_priv_key=pkey,
+                ssh_priv_key_pass=args.pkeypass,
+                challengeDestinationPath=args.challengePath,
+                certDestinationPath=args.certPath,
+                exportFormat=args.exportFormat)
+    if dest:
+        print("Destination: {} created".format(dest.id))
+        print(dest.json)
+
+def _update_dest(args):
+    dest = Destination.query.get(args.id)
+    if not dest:
+        print("There is no such destination {}".format(args.id))
+        return
+    if dest.user_id != 1:
+        print("This destination does not belong to the admin")
+        return
+
+    pkey = None
+    if args.pkey:
+        with open(args.pkey, 'rb') as f:
+            pkey = crypto.load_private_key(f.read())
+    dest.update(user_id=1,
+                host=args.host,
+                port=args.port,
+                user=args.user,
+                password=args.pwd,
+                ssh_priv_key=pkey,
+                ssh_priv_key_pass=args.pkeypass,
+                challengeDestinationPath=args.challengePath,
+                certDestinationPath=args.certPath,
+                exportFormat=args.exportFormat)
+
+    print("Destination: {} updated".format(dest.id))
+    print(dest.json)
+
+def _delete_dest(args):
+    dest = Destination.query.get(args.id)
+    if not dest:
+        print("There is no such destination {}".format(args.id))
+        return
+    if dest.user_id != 1:
+        print("This destination does not belong to the admin")
+        return
+    dest = dest.delete()
+    print("Destination {} deleted from database".format(dest.id))
 
 class Formatter(argparse.ArgumentDefaultsHelpFormatter,
                 argparse.RawDescriptionHelpFormatter):
@@ -189,13 +247,15 @@ def certifire_main():
     )
     issue.add_argument('--account', '-a',
                        help="The acme account id to use", required=True)
-    issue.add_argument('domains',
+    issue.add_argument('--destination',
+                       help="Destination to authorize/push certificates")
+    issue.add_argument('--domains',
                        help="One or more domain names to authorize", nargs='+')
 
     issue.add_argument('--type',
                        '-t',
                        help="Authorization type",
-                       choices=('dns', 'http'),
+                       choices=('dns', 'sftp'),
                        default='dns')
 
     issue.add_argument('--provider',
@@ -231,6 +291,59 @@ def certifire_main():
                         help="The acme account id to use", required=True)
     revoke.set_defaults(func=_revoke)
 
+    destination = subparsers.add_parser(
+        'destination',
+        help="Manage Destinations",
+        # description=DESCRIPTION_REVOKE, #TODO: Destinations description
+        formatter_class=Formatter,
+    )
+    destination_subparsers = destination.add_subparsers()
+
+    create_dest = destination_subparsers.add_parser(
+        'create',
+        help='Create a Destination',
+        formatter_class=Formatter
+    )
+
+    create_dest.add_argument("host", help="Host FQDN. eg: api.certifire.xyz")
+    create_dest.add_argument('--port', '-p', help="SSH port", default=22)
+    create_dest.add_argument('--user', '-u', help="SSH user", default='root')
+    create_dest.add_argument('--pwd', '-s', help="SSH password")
+    create_dest.add_argument('--pkey', '-k', help="SSH private key file")
+    create_dest.add_argument('--pkeypass', '-c', help="SSH private key password")
+    create_dest.add_argument('--challengePath', help="HTTP-01 Challenge destination path", default='/var/www/html')
+    create_dest.add_argument('--certPath', help="Certificate push destination path", default='/etc/nginx/certs')
+    create_dest.add_argument('--exportFormat', help="Certificate export format", choices=('NGINX', 'Apache'),default='NGINX')
+    
+    create_dest.set_defaults(func=_create_dest)
+
+    update_dest = destination_subparsers.add_parser(
+        'update',
+        help='Update a Destination',
+        formatter_class=Formatter
+    )
+
+    update_dest.add_argument("id", help="Destination id")
+    update_dest.add_argument("--host", '-f', help="Host FQDN. eg: api.certifire.xyz")
+    update_dest.add_argument('--port', '-p', help="SSH port")
+    update_dest.add_argument('--user', '-u', help="SSH user")
+    update_dest.add_argument('--pwd', '-s', help="SSH password")
+    update_dest.add_argument('--pkey', '-k', help="SSH private key file")
+    update_dest.add_argument('--pkeypass', '-c', help="SSH private key password")
+    update_dest.add_argument('--challengePath', help="HTTP-01 Challenge destination path")
+    update_dest.add_argument('--certPath', help="Certificate push destination path")
+    update_dest.add_argument('--exportFormat', help="Certificate export format", choices=('NGINX', 'Apache'))
+    
+    update_dest.set_defaults(func=_update_dest)
+
+    delete_dest = destination_subparsers.add_parser(
+        'delete',
+        help='Delete a Destination',
+        formatter_class=Formatter
+    )
+    delete_dest.add_argument("id", help="Destination id")
+    delete_dest.set_defaults(func=_delete_dest)
+    
     # Version
     version = subparsers.add_parser("version", help="Show the version number")
     version.set_defaults(func=lambda *args: print(

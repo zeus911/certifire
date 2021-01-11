@@ -1,3 +1,4 @@
+import json
 from os import path
 
 import paramiko
@@ -5,6 +6,7 @@ from certifire import database, db, users
 from paramiko.ssh_exception import (AuthenticationException,
                                     NoValidConnectionsError)
 from sqlalchemy import Column, ForeignKey, Integer, String, Text
+from sqlalchemy.orm import relationship
 
 
 class Destination(db.Model):
@@ -24,6 +26,7 @@ class Destination(db.Model):
     exportFormat = Column(Text())
 
     user_id = Column(Integer, ForeignKey("users.id"))
+    order_destination = relationship("Order", foreign_keys="Order.destination_id")
 
     def __init__(self, user_id, host, port=22, user='root', password=None,
                  ssh_priv_key=None, ssh_priv_key_pass=None, challengeDestinationPath='/var/www/html',
@@ -49,6 +52,22 @@ class Destination(db.Model):
             if o.get("name") == name:
                 return o.get("value", o.get("default"))
 
+    @property
+    def json(self):
+        return json.dumps({
+            'id': self.id,
+            'host': self.host,
+            'port': self.port,
+            'user': self.user,
+            'password': self.password,
+            'ssh_priv_key': self.ssh_priv_key,
+            'ssh_priv_key_pass': self.ssh_priv_key_pass,
+            'challengeDestinationPath': self.challengeDestinationPath,
+            'certDestinationPath': self.certDestinationPath,
+            'exportFormat': self.exportFormat,
+            'user_id': self.user_id
+        }, indent=4)
+
     def create(self):
         return database.create(self)
 
@@ -69,6 +88,7 @@ class Destination(db.Model):
 
     def delete(self):
         database.delete(self)
+        return self
 
     def open_sftp_connection(self):
         host = self.host
