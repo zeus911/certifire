@@ -165,8 +165,11 @@ def _create_dest(args):
                 challengeDestinationPath=args.challengePath,
                 certDestinationPath=args.certPath,
                 exportFormat=args.exportFormat)
-    if dest:
+    if dest.create():
         print("Destination: {} created".format(dest.id))
+        print(dest.json)
+    else:
+        print("Error creating destination with given data. Check hostname, password, private key")
         print(dest.json)
 
 def _update_dest(args):
@@ -182,7 +185,7 @@ def _update_dest(args):
     if args.pkey:
         with open(args.pkey, 'rb') as f:
             pkey = crypto.load_private_key(f.read())
-    dest.update(user_id=1,
+    if dest.update(user_id=1,
                 host=args.host,
                 port=args.port,
                 user=args.user,
@@ -191,10 +194,13 @@ def _update_dest(args):
                 ssh_priv_key_pass=args.pkeypass,
                 challengeDestinationPath=args.challengePath,
                 certDestinationPath=args.certPath,
-                exportFormat=args.exportFormat)
+                exportFormat=args.exportFormat):
 
-    print("Destination: {} updated".format(dest.id))
-    print(dest.json)
+        print("Destination: {} updated".format(dest.id))
+        print(dest.json)
+    else:
+        print("Error updating destination with given data. Check hostname, password, private key")
+        print(dest.json)
 
 def _delete_dest(args):
     dest = Destination.query.get(args.id)

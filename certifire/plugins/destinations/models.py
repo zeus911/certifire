@@ -12,7 +12,6 @@ from sqlalchemy.orm import relationship
 class Destination(db.Model):
     __tablename__ = "destinations"
     id = Column(Integer, primary_key=True)
-    label = Column(String(32))
     ip = Column(String(32))
     host = Column(Text())
     port = Column(Integer())
@@ -28,20 +27,19 @@ class Destination(db.Model):
     user_id = Column(Integer, ForeignKey("users.id"))
     order_destination = relationship("Order", foreign_keys="Order.destination_id")
 
-    def __init__(self, user_id, host, port=22, user='root', password=None,
-                 ssh_priv_key=None, ssh_priv_key_pass=None, challengeDestinationPath='/var/www/html',
-                 certDestinationPath='/etc/nginx/certs', exportFormat="NGINX"):
+    def __init__(self, user_id, host, port=None, user=None, password=None,
+                 ssh_priv_key=None, ssh_priv_key_pass=None, challengeDestinationPath=None,
+                 certDestinationPath=None, exportFormat=None):
         self.user_id = user_id
         self.host = host
-        self.port = port
-        self.user = user
+        self.port = port if port else 22
+        self.user = user if user else 'root'
         self.password = password
         self.ssh_priv_key = ssh_priv_key
         self.ssh_priv_key_pass = ssh_priv_key_pass
-        self.challengeDestinationPath = challengeDestinationPath
-        self.certDestinationPath = certDestinationPath
-        self.exportFormat = exportFormat
-        self.create()
+        self.challengeDestinationPath = challengeDestinationPath if challengeDestinationPath else '/var/www/html'
+        self.certDestinationPath = certDestinationPath if certDestinationPath else '/etc/nginx/certs'
+        self.exportFormat = exportFormat if exportFormat else 'NGINX'
 
     def __repr__(self):
         return "Destination(label={label})".format(label=self.id)
@@ -69,7 +67,12 @@ class Destination(db.Model):
         }, indent=4)
 
     def create(self):
-        return database.create(self)
+        try:
+            self.open_sftp_connection()
+            database.create(self)
+            return True
+        except:
+            return False
 
     def update(self, user_id=None, host=None, port=None, user=None, password=None,
                ssh_priv_key=None, ssh_priv_key_pass=None, challengeDestinationPath=None,
@@ -84,7 +87,12 @@ class Destination(db.Model):
         self.challengeDestinationPath = challengeDestinationPath if challengeDestinationPath else self.challengeDestinationPath
         self.certDestinationPath = certDestinationPath if certDestinationPath else self.certDestinationPath
         self.exportFormat = exportFormat if exportFormat else self.exportFormat
-        database.update(self)
+        try:
+            self.open_sftp_connection()
+            database.update(self)
+            return True
+        except:
+            return False
 
     def delete(self):
         database.delete(self)
@@ -125,6 +133,7 @@ class Destination(db.Model):
                 raise AuthenticationException
 
             # open the sftp session inside the ssh connection
+            print("SSH Connection Successful")
             return ssh.open_sftp(), ssh
 
         except AuthenticationException as e:

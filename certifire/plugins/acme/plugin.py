@@ -73,6 +73,7 @@ def create_order(account_id: int,
 
     account = Account.query.get(account_id)
     if not account:
+        print("Account {} not found".format(account_id))
         return False, 0
 
     type = type if type else config.DEFAULT_AUTH_TYPE
