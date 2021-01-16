@@ -5,7 +5,7 @@ from flask_sqlalchemy import SQLAlchemy
 import certifire.config as config
 
 __author__ = "Githin Manesh <githinmanesh@gmail.com>"
-__version__ = (0, 2, 0)
+__version__ = (0, 3, 0)
 __licence__ = "MIT"
 
 
