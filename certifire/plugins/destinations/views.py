@@ -65,7 +65,7 @@ def new_destination():
 def get_destination(id):
     dest = Destination.query.get(id)
     if not dest:
-        abort(400)
+        return (jsonify({'status': 'There is no such destination!'}), 404)
     if g.user.id != dest.user_id:
         return (jsonify({'status': 'This destination does not belong to you!'}), 401)
 
@@ -94,7 +94,7 @@ def get_all_destinations():
 def update_destination(id):
     dest = Destination.query.get(id)
     if not dest:
-        abort(400)
+        return (jsonify({'status': 'There is no such destination!'}), 404)
     if g.user.id != dest.user_id:
         return (jsonify({'status': 'This destination does not belong to you!'}), 401)
 
@@ -108,8 +108,8 @@ def update_destination(id):
     challengeDestinationPath = post_data.get('challengeDestinationPath')
     certDestinationPath = post_data.get('certDestinationPath')
     exportFormat = post_data.get('exportFormat')
-    if not (host or port or user or password or 
-            ssh_priv_key or ssh_priv_key_pass or 
+    if not (host or port or user or password or
+            ssh_priv_key or ssh_priv_key_pass or
             challengeDestinationPath or certDestinationPath or exportFormat):
         post_data = request.get_json(force=True)
         host = post_data.get('host')
@@ -128,15 +128,15 @@ def update_destination(id):
         key = crypto.load_private_key(ssh_priv_key.encode('UTF-8'))
 
     ret = dest.update(user_id=user_id,
-                       host=host,
-                       port=port,
-                       user=user,
-                       password=password,
-                       ssh_priv_key=key,
-                       ssh_priv_key_pass=ssh_priv_key_pass,
-                       challengeDestinationPath=challengeDestinationPath,
-                       certDestinationPath=certDestinationPath,
-                       exportFormat=exportFormat)
+                      host=host,
+                      port=port,
+                      user=user,
+                      password=password,
+                      ssh_priv_key=key,
+                      ssh_priv_key_pass=ssh_priv_key_pass,
+                      challengeDestinationPath=challengeDestinationPath,
+                      certDestinationPath=certDestinationPath,
+                      exportFormat=exportFormat)
     if ret:
         return (jsonify({'status': 'Destination updated', 'id': dest.id}), 202,
                 {'Location': url_for('get_destination', id=dest.id, _external=True),
@@ -145,3 +145,19 @@ def update_destination(id):
         status = json.loads(dest.json)
         status['status'] = "Error updating destination with given data. Check hostname, password, private key"
         return (jsonify(status), 400)
+
+
+@app.route('/api/destination/<int:id>', methods=['DELETE'])
+@auth.login_required
+def delete_destination(id):
+    dest = Destination.query.get(id)
+    if not dest:
+        return (jsonify({'status': 'There is no such destination!'}), 404)
+    if g.user.id != dest.user_id:
+        return (jsonify({'status': 'This destination does not belong to you!'}), 401)
+
+    try:
+        dest.delete()
+        return (jsonify({'status': 'Destination deleted'}), 200)
+    except:
+        return (jsonify({'status': 'Failed  to delete'}), 400)
