@@ -2,13 +2,15 @@ import os
 import time
 
 import jwt
-from flask import abort, g, jsonify, request, url_for
+from flask import abort, Blueprint, g, jsonify, request, url_for
 from sqlalchemy import Boolean, Column, Integer, String
 from sqlalchemy.orm import relationship
 from werkzeug.security import check_password_hash, generate_password_hash
 
-from certifire import app, auth, db
+from certifire import auth, db
+import certifire.config as config
 
+bp = Blueprint("users", __name__)
 
 class User(db.Model):
     __tablename__ = 'users'
@@ -36,12 +38,12 @@ class User(db.Model):
     def generate_auth_token(self, expires_in=600):
         return jwt.encode(
             {'id': self.id, 'exp': time.time() + expires_in},
-            app.config['SECRET_KEY'], algorithm='HS256')
+            config.CERTIFIRE_TOKEN_SECRET, algorithm='HS256')
 
     @staticmethod
     def verify_auth_token(token):
         try:
-            data = jwt.decode(token, app.config['SECRET_KEY'],
+            data = jwt.decode(token, config.CERTIFIRE_TOKEN_SECRET,
                               algorithms=['HS256'])
         except:
             return
@@ -61,7 +63,7 @@ def verify_password(username_or_token, password):
     return True
 
 
-@app.route('/api/users', methods=['POST'])
+@bp.route('/api/users', methods=['POST'])
 @auth.login_required
 def new_user():
     if not g.user.is_admin:
@@ -81,10 +83,10 @@ def new_user():
     db.session.add(user)
     db.session.commit()
     return (jsonify({'username': user.username}), 201,
-            {'Location': url_for('get_user', id=user.id, _external=True)})
+            {'Location': url_for('users.get_user', id=user.id, _external=True)})
 
 
-@app.route('/api/users/<int:id>')
+@bp.route('/api/users/<int:id>')
 def get_user(id):
     user = User.query.get(id)
     if not user:
@@ -92,7 +94,7 @@ def get_user(id):
     return jsonify({'username': user.username})
 
 
-@app.route('/api/token')
+@bp.route('/api/token')
 @auth.login_required
 def get_auth_token():
     token = g.user.generate_auth_token(600)
@@ -100,7 +102,11 @@ def get_auth_token():
             {'token': token})
 
 
-@app.route('/api/resource')
+@bp.route('/api/resource')
 @auth.login_required
 def get_resource():
     return jsonify({'data': 'Hello, %s!' % g.user.username})
+
+@bp.route('/api/public')
+def init():
+    return jsonify({'data': 'Hello World'})
