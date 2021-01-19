@@ -1,6 +1,8 @@
 Certifire
 =========
 
+![Python Testing](https://github.com/certifire/certifire/workflows/Python%20Testing/badge.svg)
+
 Installation
 ------------
 
