@@ -34,7 +34,7 @@ class DevelopmentConfig(Config):
 class TestingConfig(Config):
     """Configurations for Testing."""
     TESTING = True
-    SQLALCHEMY_DATABASE_URI = "postgresql://certifire:certifire@127.0.0.1:5432/test_db"
+    SQLALCHEMY_DATABASE_URI = "sqlite:///db.sqlite"
     DEBUG = True
     LETS_ENCRYPT_PRODUCTION = "https://acme-staging-v02.api.letsencrypt.org/"
 
