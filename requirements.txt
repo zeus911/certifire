@@ -12,6 +12,7 @@ itsdangerous
 Jinja2
 josepy
 MarkupSafe
+paramiko
 psycopg2-binary
 PyJWT
 pylint-flask
