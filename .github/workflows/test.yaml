@@ -1,5 +1,5 @@
 
-name: Python package
+name: Python Testing
 
 on: [push]
 
@@ -21,6 +21,9 @@ jobs:
     - name: Install dependencies
       run: |
         if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+    - name: Install certifire
+      run: |
+        python setup.py install
     - name: Runs our Tests
       run: |
-        python -m certifire.manage test
+        certifire-manager test
