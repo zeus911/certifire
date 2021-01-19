@@ -274,11 +274,8 @@ class Destination(db.Model):
                     "Uploading {0} to {1}".format(filename, dst_path)
                 )
                 try:
-                    print("Debug 0")
                     with sftp.open(path.join(dst_path, filename), "w") as f:
-                        print("Debug 1")
                         f.write(data)
-                        print("Debug 2")
                 except PermissionError as permerror:
                     if permerror.errno == 13:
                         print(
