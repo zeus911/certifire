@@ -5,6 +5,7 @@ click
 cryptography
 Flask
 Flask-HTTPAuth
+Flask-Migrate
 Flask-Script
 Flask-SQLAlchemy
 inflection
