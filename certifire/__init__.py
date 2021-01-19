@@ -1,5 +1,6 @@
 from flask import Flask
 from flask_httpauth import HTTPBasicAuth
+from flask_migrate import Migrate, MigrateCommand
 from flask_sqlalchemy import SQLAlchemy
 
 import certifire.config as config
@@ -30,3 +31,4 @@ app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 db = SQLAlchemy(app)
 auth = HTTPBasicAuth()
+migrate = Migrate(app, db)

@@ -11,7 +11,6 @@ __pycache__
 *.egg-info/
 .DS_Store
 env.sh
-migrations
 *.idea
 bin/
 lib/

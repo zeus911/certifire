@@ -1,8 +1,9 @@
 import os
 
+from flask_migrate import MigrateCommand
 from flask_script import Manager
 
-from certifire import app, database, db, users
+from certifire import app, database, db, migrate, users
 from certifire.plugins.acme import views
 from certifire.plugins.destinations import views
 
@@ -39,6 +40,7 @@ def drop_db():
 def main():
     manager.run()
 
+manager.add_command('db', MigrateCommand)
 
 if __name__ == '__main__':
     main()
