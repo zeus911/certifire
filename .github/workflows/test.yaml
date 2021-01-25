@@ -1,5 +1,5 @@
 
-name: Python Testing
+name: Python Tests
 
 on: [push, workflow_dispatch]
 
@@ -21,6 +21,6 @@ jobs:
     - name: Install dependencies
       run: |
         if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
-    - name: Runs our Tests
+    - name: Run our Tests
       run: |
         python -m certifire.manage test
