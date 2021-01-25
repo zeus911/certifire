@@ -10,6 +10,7 @@ from certifire.plugins.acme.models import Account, Certificate, Order
 from certifire.plugins.acme.plugin import (create_order, register, reorder,
                                            revoke_certificate)
 from certifire.plugins.destinations.models import Destination
+from certifire import app
 
 logger = logging.getLogger(__name__)
 
@@ -87,16 +88,17 @@ def _register(args):
         with open(args.key_file, 'rb') as f:
             key = crypto.load_private_key(f.read())
 
-    ret, act_id = register(
-        user_id=1,
-        email=args.email,
-        server=args.server,
-        rsa_key=key,
-        organization=args.organization,
-        organizational_unit=args.organizational_unit,
-        country=args.country,
-        state=args.state,
-        location=args.location)
+    with app.app_context():
+        ret, act_id = register(
+            user_id=1,
+            email=args.email,
+            server=args.server,
+            rsa_key=key,
+            organization=args.organization,
+            organizational_unit=args.organizational_unit,
+            country=args.country,
+            state=args.state,
+            location=args.location)
 
     if ret:
         print("Account created with account id: {}".format(act_id))
@@ -115,21 +117,22 @@ def _issue(args):
         with open(args.csr_file, 'rb') as f:
             key = crypto.load_csr(f.read())
 
-    ret, order_id = create_order(
-        account_id=args.account,
-        destination_id=args.destination,
-        domains=args.domains,
-        type=args.type,
-        provider=args.provider,
-        email=args.email,
-        organization=args.organization,
-        organizational_unit=args.organizational_unit,
-        country=args.country,
-        state=args.state,
-        location=args.location,
-        reissue=False,
-        csr=csr,
-        key=key)
+    with app.app_context():
+        ret, order_id = create_order(
+            account_id=args.account,
+            destination_id=args.destination,
+            domains=args.domains,
+            type=args.type,
+            provider=args.provider,
+            email=args.email,
+            organization=args.organization,
+            organizational_unit=args.organizational_unit,
+            country=args.country,
+            state=args.state,
+            location=args.location,
+            reissue=False,
+            csr=csr,
+            key=key)
 
     if ret:
         print("Order created with order id: {}".format(order_id))
@@ -138,80 +141,84 @@ def _issue(args):
 
 
 def _revoke(args):
-    certdb = Certificate.query.get(args.certificate)
-    if not certdb:
-        print("There is no such certificate {}".format(args.certificate))
-        return
+    with app.app_context():
+        certdb = Certificate.query.get(args.certificate)
+        if not certdb:
+            print("There is no such certificate {}".format(args.certificate))
+            return
 
-    order = Order.query.get(certdb.order_id)
-    if not order:
-        print("Order for this certificate not found")
-        return
+        order = Order.query.get(certdb.order_id)
+        if not order:
+            print("Order for this certificate not found")
+            return
 
-    revoke_certificate(order.account_id, certdb.id)
+        revoke_certificate(order.account_id, certdb.id)
 
 def _create_dest(args):
     pkey = None
     if args.pkey:
         with open(args.pkey, 'rb') as f:
             pkey = crypto.load_private_key(f.read())
-    dest = Destination(user_id=1,
-                host=args.host,
-                port=args.port,
-                user=args.user,
-                password=args.pwd,
-                ssh_priv_key=pkey,
-                ssh_priv_key_pass=args.pkeypass,
-                challengeDestinationPath=args.challengePath,
-                certDestinationPath=args.certPath,
-                exportFormat=args.exportFormat)
-    if dest.create():
-        print("Destination: {} created".format(dest.id))
-        print(dest.json)
-    else:
-        print("Error creating destination with given data. Check hostname, password, private key")
-        print(dest.json)
+    with app.app_context():
+        dest = Destination(user_id=1,
+                    host=args.host,
+                    port=args.port,
+                    user=args.user,
+                    password=args.pwd,
+                    ssh_priv_key=pkey,
+                    ssh_priv_key_pass=args.pkeypass,
+                    challengeDestinationPath=args.challengePath,
+                    certDestinationPath=args.certPath,
+                    exportFormat=args.exportFormat)
+        if dest.create():
+            print("Destination: {} created".format(dest.id))
+            print(dest.json)
+        else:
+            print("Error creating destination with given data. Check hostname, password, private key")
+            print(dest.json)
 
 def _update_dest(args):
-    dest = Destination.query.get(args.id)
-    if not dest:
-        print("There is no such destination {}".format(args.id))
-        return
-    if dest.user_id != 1:
-        print("This destination does not belong to the admin")
-        return
+    with app.app_context():
+        dest = Destination.query.get(args.id)
+        if not dest:
+            print("There is no such destination {}".format(args.id))
+            return
+        if dest.user_id != 1:
+            print("This destination does not belong to the admin")
+            return
 
-    pkey = None
-    if args.pkey:
-        with open(args.pkey, 'rb') as f:
-            pkey = crypto.load_private_key(f.read())
-    if dest.update(user_id=1,
-                host=args.host,
-                port=args.port,
-                user=args.user,
-                password=args.pwd,
-                ssh_priv_key=pkey,
-                ssh_priv_key_pass=args.pkeypass,
-                challengeDestinationPath=args.challengePath,
-                certDestinationPath=args.certPath,
-                exportFormat=args.exportFormat):
+        pkey = None
+        if args.pkey:
+            with open(args.pkey, 'rb') as f:
+                pkey = crypto.load_private_key(f.read())
+        if dest.update(user_id=1,
+                    host=args.host,
+                    port=args.port,
+                    user=args.user,
+                    password=args.pwd,
+                    ssh_priv_key=pkey,
+                    ssh_priv_key_pass=args.pkeypass,
+                    challengeDestinationPath=args.challengePath,
+                    certDestinationPath=args.certPath,
+                    exportFormat=args.exportFormat):
 
-        print("Destination: {} updated".format(dest.id))
-        print(dest.json)
-    else:
-        print("Error updating destination with given data. Check hostname, password, private key")
-        print(dest.json)
+            print("Destination: {} updated".format(dest.id))
+            print(dest.json)
+        else:
+            print("Error updating destination with given data. Check hostname, password, private key")
+            print(dest.json)
 
 def _delete_dest(args):
-    dest = Destination.query.get(args.id)
-    if not dest:
-        print("There is no such destination {}".format(args.id))
-        return
-    if dest.user_id != 1:
-        print("This destination does not belong to the admin")
-        return
-    dest = dest.delete()
-    print("Destination {} deleted from database".format(dest.id))
+    with app.app_context():
+        dest = Destination.query.get(args.id)
+        if not dest:
+            print("There is no such destination {}".format(args.id))
+            return
+        if dest.user_id != 1:
+            print("This destination does not belong to the admin")
+            return
+        dest = dest.delete()
+        print("Destination {} deleted from database".format(dest.id))
 
 class Formatter(argparse.ArgumentDefaultsHelpFormatter,
                 argparse.RawDescriptionHelpFormatter):
