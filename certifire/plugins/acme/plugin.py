@@ -6,6 +6,7 @@ from certifire.plugins.acme import crypto
 from certifire.plugins.acme.handlers import AcmeDnsHandler, AcmeHttpHandler
 from certifire.plugins.acme.models import Account, Certificate, Order
 from certifire.plugins.destinations.models import Destination
+from certifire.thread import AppContextThread
 
 
 def register(user_id=1, email: str = None, server: str = None, rsa_key=None,
@@ -113,7 +114,7 @@ def create_order(account_id: int,
             print("Order {} exists for given email: {} and account_id: {}.".format(
                 order.uri, email, account.id))
             #acme_order = acme.create_order(order.csr, order.provider, order.id)
-            Thread(target=acme.create_order, args=(
+            AppContextThread(target=acme.create_order, args=(
                 order.csr, order.provider, order.id, destination_id, reissue)).start()
             return False, order.id
 
@@ -127,7 +128,7 @@ def create_order(account_id: int,
     database.add(order)
 
     #acme_order = acme.create_order(csr, provider, order.id)
-    Thread(target=acme.create_order, args=(
+    AppContextThread(target=acme.create_order, args=(
         csr, provider, order.id, destination_id)).start()
     return True, order.id
 
@@ -144,7 +145,7 @@ def reorder(account_id: int, order_id: int):
         acme = AcmeDnsHandler(account.id)
     elif order_db.type == 'sftp':
         acme = AcmeHttpHandler(account.id)
-    Thread(target=acme.create_order, args=(order_db.csr,
+    AppContextThread(target=acme.create_order, args=(order_db.csr,
                             order_db.provider, order_db.id, order_db.destination_id, True)).start()
     return True, order_db.id
 
