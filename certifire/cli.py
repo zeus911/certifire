@@ -130,7 +130,7 @@ def _issue(args):
             country=args.country,
             state=args.state,
             location=args.location,
-            reissue=False,
+            reissue=args.reissue,
             csr=csr,
             key=key)
 
@@ -289,8 +289,12 @@ def certifire_main():
     issue.add_argument('--country', '-c', help="Name of country")
     issue.add_argument('--state', '-s', help="Name of state")
     issue.add_argument('--location', '-l', help="Name of location")
+    issue.add_argument('--reissue',
+                       dest='reissue',
+                       help="Reissue certificate",
+                       action='store_true')
 
-    issue.set_defaults(func=_issue, ocsp_must_staple=False)
+    issue.set_defaults(func=_issue, reissue=False)
 
     # Certificate revocation
     revoke = subparsers.add_parser(
